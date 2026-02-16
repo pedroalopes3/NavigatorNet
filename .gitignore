@@ -1,0 +1,23 @@
+# --- BIG FILES / SIMULATORS ---
+AirSim/
+AirSimNH/
+
+# --- ROS 2 BUILD ARTIFACTS ---
+build/
+install/
+log/
+*/build/
+*/install/
+*/log/
+
+# --- PYTHON CACHE ---
+__pycache__/
+*.py[cod]
+*.class
+
+# --- VS CODE SETTINGS ---
+.vscode/
+
+# --- OS JUNK ---
+.DS_Store
+Thumbs.db
