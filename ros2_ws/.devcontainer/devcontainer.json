@@ -1,0 +1,24 @@
+{
+    "name": "Navigator Net",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "forwardPorts": [8765], 
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-iot.vscode-ros",
+                "ms-vscode.cpptools"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/bin/python3.10"
+            }
+        }
+    },
+    "postCreateCommand": "apt-get update && rosdep update && rosdep install --from-paths src --ignore-src -y && ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
+
+}
