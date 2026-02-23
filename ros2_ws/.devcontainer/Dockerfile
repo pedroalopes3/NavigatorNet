@@ -1,5 +1,5 @@
 # Imagem oficial do ROS 2 Humble 
-FROM osrf/ros:humble-desktop
+FROM ros:humble-ros-base
 
 # Frontend não interativo 
 ENV DEBIAN_FRONTEND=noninteractive
