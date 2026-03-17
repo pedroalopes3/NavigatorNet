@@ -1,0 +1,35 @@
+{
+    "name": "Navigator Net",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "forwardPorts": [8765], 
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-iot.vscode-ros",
+                "ms-vscode.cpptools",
+                "charliermarsh.ruff",
+                "ms-python.mypy-type-checker"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/bin/python3.10",
+                "python.testing.pytestEnabled": true,
+                "python.testing.unittestEnabled": false,
+                "[python]": {
+                    "editor.defaultFormatter": "charliermarsh.ruff",
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.organizeImports": "explicit"
+                    }
+                }
+            }
+        }
+    },
+    "postCreateCommand": "apt-get update && rosdep update && rosdep install --from-paths src --ignore-src -y && colcon build",
+    "postStartCommand": "bash -c 'source /opt/ros/humble/setup.bash && nohup ros2 launch foxglove_bridge foxglove_bridge_launch.xml > /workspace/foxglove.log 2>&1 &'"
+}

@@ -1,10 +1,11 @@
-# Imagem oficial do ROS 2 Humble 
 FROM ros:humble-ros-base
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Frontend não interativo 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Dependências 
+# Dependências (apt)
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3.10-dev \
@@ -19,12 +20,16 @@ RUN apt-get update && apt-get install -y \
     nano \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip3 install --no-cache-dir \
-    numpy
+
+RUN uv pip install --system --no-cache \
+    numpy \
+    mypy \
+    ruff \
+    pytest
 
 WORKDIR /workspace
 
-#  ~/.bashrc para dar source do ROS 2 e o workspace automaticamente
+# ~/.bashrc para dar source do ROS 2 e o workspace automaticamente
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
     echo "if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi" >> ~/.bashrc
 

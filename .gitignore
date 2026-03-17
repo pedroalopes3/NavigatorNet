@@ -10,6 +10,11 @@ log/
 */install/
 */log/
 
+# Ros bags
+*.bag
+*.mcap
+*.db3
+
 # --- PYTHON CACHE ---
 __pycache__/
 *.py[cod]
