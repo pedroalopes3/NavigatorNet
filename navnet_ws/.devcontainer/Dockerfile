@@ -22,7 +22,10 @@ RUN apt-get update && apt-get install -y \
 
 
 RUN uv pip install --system --no-cache \
-    numpy \
+    "numpy<2" \
+    mercantile \
+    mcap \
+    mcap-ros2-support \
     mypy \
     ruff \
     pytest
