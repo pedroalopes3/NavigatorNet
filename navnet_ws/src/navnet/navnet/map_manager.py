@@ -9,9 +9,8 @@ import numpy as np
 
 class MapRepoManager:
     def __init__(self, repo_path):
-        self.repo_path = repo_path  # Caminho para o diretório onde estão os tiles
+        self.repo_path = repo_path
 
-        # Guarda os zooms e se são high_res (importante para o cálculo exato)
         self.zoom_info = {}
         self.global_bbox = {
             "west": float("inf"),
@@ -21,12 +20,10 @@ class MapRepoManager:
         }
         self.analyzed = False
 
-        # Variáveis constantes físicas e da câmara
         self.EARTH_RADIUS = 6378137.0
         self.camera_pitch_offset_deg = 27.0
         self.camera_roll_offset_deg = -4.0
 
-        # Tópicos e Memória de Telemetria Interna
         self.TOPIC_GPS = "/global_position_int"
         self.TOPIC_ATTITUDE = "/attitude"
 
@@ -36,13 +33,10 @@ class MapRepoManager:
             "alt_m": 0.0,
             "heading_deg": 0.0,
             "pitch_rad": 0.0,
+            "roll_rad": 0.0,
         }
 
     def update_telemetry_from_msg(self, topic, ros_msg):
-        """
-        Recebe a mensagem bruta do ROS e extrai os valores para a memória interna.
-        Faz a conversão de inteiros para graus ou metros (1e-7, 1e-3, etc).
-        """
         if topic == self.TOPIC_GPS:
             self.current_telemetry["lat"] = ros_msg.lat * 1e-7
             self.current_telemetry["lon"] = ros_msg.lon * 1e-7
@@ -51,9 +45,9 @@ class MapRepoManager:
 
         elif topic == self.TOPIC_ATTITUDE:
             self.current_telemetry["pitch_rad"] = ros_msg.pitch
+            self.current_telemetry["roll_rad"] = ros_msg.roll
 
     def analyze(self):
-        """Lê os metadados do diretório, extrai a Bounding Box global e lista os Zooms."""
         if not os.path.exists(self.repo_path):
             print(f"Erro: O diretório '{self.repo_path}' não existe.")
             return
@@ -71,14 +65,12 @@ class MapRepoManager:
                         zoom = data.get("zoom", int(item))
                         high_res = data.get("high_res", False)
 
-                        # Primeiro, extraímos os limites para calcular a latitude média
                         temp_west, temp_south = float("inf"), float("inf")
                         temp_east, temp_north = float("-inf"), float("-inf")
 
                         for tile in data.get("tiles", []):
                             bounds = tile.get("bounds", {})
                             if bounds:
-                                # Atualiza a Bounding Box Global do Manager
                                 self.global_bbox["west"] = min(
                                     self.global_bbox["west"], bounds["west"]
                                 )
@@ -92,14 +84,11 @@ class MapRepoManager:
                                     self.global_bbox["north"], bounds["north"]
                                 )
 
-                                # Limites temporários para este zoom específico
                                 temp_west = min(temp_west, bounds["west"])
                                 temp_south = min(temp_south, bounds["south"])
                                 temp_east = max(temp_east, bounds["east"])
                                 temp_north = max(temp_north, bounds["north"])
 
-                        # CALCULO DO PPM REAL:
-                        # Usamos a latitude central desta zona para dar um valor informativo no resumo
                         center_lat = (temp_south + temp_north) / 2.0
                         real_ppm = self.calculate_theoretical_ppm(center_lat, zoom, high_res)
 
@@ -136,7 +125,6 @@ class MapRepoManager:
 
     @staticmethod
     def calculate_theoretical_ppm(latitude, zoom, high_res=False):
-        """Calcula o PPM exato para uma latitude e zoom específicos usando projeção Web Mercator."""
         C = 40075016.686
         lat_rad = math.radians(latitude)
         exponent = 9 if high_res else 8
@@ -144,11 +132,6 @@ class MapRepoManager:
         return 1.0 / meters_per_pixel
 
     def get_best_zoom(self, target_ppm, current_latitude):
-        """
-        Recebe o PPM do drone e a latitude atual.
-        Recalcula o PPM exato de todos os zooms disponíveis para essa latitude,
-        e devolve o zoom com a escala mais próxima à do drone.
-        """
         if not self.analyzed:
             self.analyze()
 
@@ -164,6 +147,8 @@ class MapRepoManager:
             calculated_ppm = self.calculate_theoretical_ppm(
                 current_latitude, zoom, info["high_res"]
             )
+
+            # Aqui podes alterar para a tua lógica de "allowed_zooms" se preferires
             diff = abs(calculated_ppm - target_ppm)
 
             if diff < min_diff:
@@ -173,70 +158,154 @@ class MapRepoManager:
 
         return best_zoom, best_calculated_ppm
 
-    def calculate_incidence_point(self, lat, lon, alt_m, heading_deg, drone_pitch_rad):
+    def calculate_incidence_point(
+        self, lat, lon, alt_m, heading_deg, drone_pitch_rad, drone_roll_rad
+    ):
         """
-        Calcula onde o centro da câmara está a olhar no solo usando trigonometria esférica básica.
+        Calcula o ponto exato no solo usando Raycasting 3D (Matrizes de Rotação Yaw-Pitch-Roll).
+        Sistema de Coordenadas: NED (North, East, Down).
         """
-        heading_rad = math.radians(heading_deg)
-        camera_pitch_rad = math.radians(self.camera_pitch_offset_deg)
+        # 1. Somar os offsets fixos da câmara à atitude do drone
+        pitch = drone_pitch_rad - math.radians(self.camera_pitch_offset_deg)
+        roll = drone_roll_rad + math.radians(self.camera_roll_offset_deg)
+        yaw = math.radians(heading_deg)
 
-        total_pitch_rad = drone_pitch_rad + camera_pitch_rad
-        angle_from_vertical = (math.pi / 2.0) - total_pitch_rad
+        # 2. Matrizes de Rotação em eixos 3D
+        # Rotação em Z (Yaw / Heading)
+        Rz = np.array(
+            [[math.cos(yaw), -math.sin(yaw), 0], [math.sin(yaw), math.cos(yaw), 0], [0, 0, 1]]
+        )
 
-        # Evitar projeção no infinito se a câmara olhar acima do horizonte
-        if angle_from_vertical >= math.pi / 2.0:
-            return None, None, angle_from_vertical
+        # Rotação em Y (Pitch)
+        Ry = np.array(
+            [
+                [math.cos(pitch), 0, math.sin(pitch)],
+                [0, 1, 0],
+                [-math.sin(pitch), 0, math.cos(pitch)],
+            ]
+        )
 
-        d = alt_m * math.tan(angle_from_vertical)
-        dy = d * math.cos(heading_rad)
-        dx = d * math.sin(heading_rad)
+        # Rotação em X (Roll)
+        Rx = np.array(
+            [[1, 0, 0], [0, math.cos(roll), -math.sin(roll)], [0, math.sin(roll), math.cos(roll)]]
+        )
 
-        delta_lat = (dy / self.EARTH_RADIUS) * (180.0 / math.pi)
-        delta_lon = (dx / (self.EARTH_RADIUS * math.cos(math.radians(lat)))) * (180.0 / math.pi)
+        # Matriz de Rotação Combinada (A ordem Yaw -> Pitch -> Roll é standard na aviação)
+        R = Rz @ Ry @ Rx
+
+        # 3. Disparar o "Raio Visual"
+        # Vetor inicial da câmara (A apontar para a frente no eixo X)
+        v_cam = np.array([1.0, 0.0, 0.0])
+
+        # Vetor real rodado no mundo 3D
+        v_world = R @ v_cam
+        v_x, v_y, v_z = v_world
+
+        # Se v_z <= 0, a câmara está a olhar para cima (céu) ou perfeitamente para o horizonte
+        if v_z <= 0.0:
+            return None, None, float("inf")
+
+        # 4. Calcular o choque no solo (O chão está à distância alt_m no eixo Z para baixo)
+        t = alt_m / v_z
+
+        dx = v_x * t  # Deslocamento no terreno para Norte (em metros)
+        dy = v_y * t  # Deslocamento no terreno para Este (em metros)
+
+        # 5. Converter de metros para graus de GPS
+        delta_lat = (dx / self.EARTH_RADIUS) * (180.0 / math.pi)
+        delta_lon = (dy / (self.EARTH_RADIUS * math.cos(math.radians(lat)))) * (180.0 / math.pi)
 
         inc_lat = lat + delta_lat
         inc_lon = lon + delta_lon
 
-        return inc_lat, inc_lon, angle_from_vertical
+        # A verdadeira distância geométrica do sensor até ao ponto que está a olhar
+        # (Muito mais preciso que a conta antiga para calcular a escala PPM!)
+        slant_distance = math.sqrt(dx**2 + dy**2 + alt_m**2)
+
+        return inc_lat, inc_lon, slant_distance
+
+    # ==========================================
+    # NOVO: MOTOR DE STITCHING
+    # ==========================================
+    def get_stitched_map(self, target_tile, zoom, inc_lat, inc_lon):
+        """
+        Gera um mosaico otimizado de 2x2 (4 tiles) em vez de 3x3.
+        Escolhe os vizinhos dinamicamente com base no quadrante do ponto de incidência.
+        """
+        info = self.zoom_info.get(zoom, {})
+        high_res = info.get("high_res", False)
+        tile_size = 512 if high_res else 256
+
+        # 1. Encontrar o centro geométrico do tile alvo
+        bounds = mercantile.bounds(target_tile)
+        center_lat = (bounds.north + bounds.south) / 2.0
+        center_lon = (bounds.east + bounds.west) / 2.0
+
+        # 2. Descobrir a direção para a qual o mosaico deve crescer
+        # Web Mercator: X cresce para Este (Direita), Y cresce para Sul (Baixo)
+        dir_x = 1 if inc_lon >= center_lon else -1
+        dir_y = 1 if inc_lat <= center_lat else -1  # Menor latitude = mais a Sul = Y aumenta
+
+        # 3. Criar uma tela limpa para 4 tiles (ex: 1024x1024)
+        mosaic = np.zeros((2 * tile_size, 2 * tile_size, 3), dtype=np.uint8)
+
+        # 4. Montar os 4 tiles (O original + 3 vizinhos)
+        for dy in [0, dir_y]:
+            for dx in [0, dir_x]:
+                nx = (target_tile.x + dx) % (2**zoom)
+                ny = target_tile.y + dy
+
+                # Lógica para posicionar o tile corretamente na matriz 2x2
+                # Se crescemos para a esquerda (dir_x = -1), o tile original (dx=0) fica na coluna 1.
+                col_pos = dx if dir_x == 1 else dx + 1
+                row_pos = dy if dir_y == 1 else dy + 1
+
+                y_start = row_pos * tile_size
+                x_start = col_pos * tile_size
+
+                if 0 <= ny < (2**zoom):
+                    filepath = os.path.join(self.repo_path, str(zoom), f"{zoom}_{nx}_{ny}.jpg")
+                    if os.path.exists(filepath):
+                        img = cv2.imread(filepath)
+                        if img is not None:
+                            mosaic[y_start : y_start + tile_size, x_start : x_start + tile_size] = (
+                                img
+                            )
+
+        return mosaic, tile_size
 
     def get_map_for_telemetry(self, f_final):
-        """
-        Função principal que faz a ponte: Telemetria Interna -> Ponto de Incidência -> Tile Correto.
-        Devolve a imagem do mapa (numpy array) e um dicionário com os metadados.
-        """
+        # 1. Proteção de Altitude (Para evitar divisões por zero e explosão no chão)
+        alt_m = max(self.current_telemetry["alt_m"], 1.0)
+
+        # 2. Ler toda a atitude (agora com o Roll incluído!)
         lat = self.current_telemetry["lat"]
         lon = self.current_telemetry["lon"]
-        alt_m = self.current_telemetry["alt_m"]
         heading_deg = self.current_telemetry["heading_deg"]
         drone_pitch_rad = self.current_telemetry["pitch_rad"]
+        drone_roll_rad = self.current_telemetry["roll_rad"]
 
-        inc_lat, inc_lon, angle_vert = self.calculate_incidence_point(
-            lat, lon, alt_m, heading_deg, drone_pitch_rad
+        # 3. Chama APENAS a nova função super-precisa de Raycasting 3D
+        inc_lat, inc_lon, slant_distance = self.calculate_incidence_point(
+            lat, lon, alt_m, heading_deg, drone_pitch_rad, drone_roll_rad
         )
 
         if inc_lat is None:
-            # A câmara está a olhar para o céu (acima do horizonte)
+            # A câmara está a olhar acima do horizonte (céu)
             return None, None
 
-        slant_distance = alt_m / math.cos(angle_vert) if math.cos(angle_vert) != 0 else float("inf")
+        # 4. Cálculo do PPM com a verdadeira distância 3D
         drone_ppm = f_final / slant_distance if slant_distance > 0 else 0
 
+        # 5. Obter o melhor zoom
         best_zoom, map_ppm = self.get_best_zoom(drone_ppm, inc_lat)
         if best_zoom is None:
             return None, None
 
         target_tile = mercantile.tile(inc_lon, inc_lat, best_zoom)
 
-        filename = f"{best_zoom}_{target_tile.x}_{target_tile.y}.jpg"
-        filepath = os.path.join(self.repo_path, str(best_zoom), filename)
-
-        map_img = None
-        if os.path.exists(filepath):
-            map_img = cv2.imread(filepath)
-        else:
-            # Opcional: Descomentar para debug
-            print(f"[MapManager] Aviso: O Tile {filename} não existe na pasta!")
-            pass
+        # 6. Chamar o Stitcher para criar o mosaico 3x3
+        map_img, tile_size = self.get_stitched_map(target_tile, best_zoom, inc_lat, inc_lon)
 
         info = {
             "inc_lat": inc_lat,
@@ -246,13 +315,13 @@ class MapRepoManager:
             "map_ppm": map_ppm,
             "tile_x": target_tile.x,
             "tile_y": target_tile.y,
-            "filename": filename,
+            "mosaic_size": map_img.shape if map_img is not None else None,
+            "base_tile_size": tile_size,
         }
 
         return map_img, info
 
     def get_available_tiles(self):
-        """Retorna uma lista de tuplos (Z, X, Y) com todos os tiles disponíveis na pasta."""
         tiles_list = []
         for z_folder in os.listdir(self.repo_path):
             if not z_folder.isdigit():
@@ -269,26 +338,17 @@ class MapRepoManager:
         return tiles_list
 
     def __contains__(self, tile_tuple):
-        """
-        Permite usar a sintaxe 'if (z, x, y) in map_manager:'.
-        Verifica rapidamente se o ficheiro existe no disco.
-        """
         z, x, y = tile_tuple
         filepath = os.path.join(self.repo_path, str(z), f"{z}_{x}_{y}.jpg")
         return os.path.exists(filepath)
 
     def get_image(self, z, x, y):
-        """Lê e retorna a imagem do tile (Z, X, Y) usando OpenCV."""
         if (z, x, y) not in self:
             return None
         filepath = os.path.join(self.repo_path, str(z), f"{z}_{x}_{y}.jpg")
         return cv2.imread(filepath)
 
     def get_affine_transform(self, z, x, y, image_size=256, epsg=4326):
-        """
-        Retorna a matriz de transformação afim 3x3 para um dado tile.
-        epsg=4326 (Latitude/Longitude) ou epsg=3857 (Metros Web Mercator).
-        """
         tile = mercantile.Tile(x, y, z)
 
         if epsg == 4326:

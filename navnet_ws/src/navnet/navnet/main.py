@@ -51,34 +51,60 @@ def main(args: list[str] | None = None) -> None:
     topic_attitude = "/attitude"
 
     try:
-        # O main.py é que abre o ficheiro agora!
         with open(input_file, "rb") as f:
             reader = make_reader(f, decoder_factories=[DecoderFactory()])
             iterator = reader.iter_decoded_messages(topics=[topic_image, topic_gps, topic_attitude])
+
+            # 1. CRIAR BUFFERS DE HISTÓRICO
+            gps_buffer = []
+            att_buffer = []
+
+            # Ex: Se a câmara estiver 100ms atrasada em relação ao IMU, metes 100_000_000
+            CAMERA_DELAY_NS = 0
 
             for schema, channel, message, ros_msg in iterator:
                 if not rclpy.ok():
                     break
 
-                # 1. Atualizar Telemetria
-                if channel.topic in [topic_gps, topic_attitude]:
-                    node.map_manager.update_telemetry_from_msg(channel.topic, ros_msg)
-                    continue  # Volta para o topo do loop e procura a próxima mensagem
+                msg_time = message.log_time
 
-                # 2. Processar Imagem e Mapa (Apenas quando aparece uma imagem do drone)
+                # 2. ALIMENTAR OS BUFFERS
+                if channel.topic == topic_gps:
+                    gps_buffer.append((msg_time, ros_msg))
+                    if len(gps_buffer) > 500:
+                        gps_buffer.pop(0)  # Manter apenas as últimas 50
+                    continue
+
+                if channel.topic == topic_attitude:
+                    att_buffer.append((msg_time, ros_msg))
+                    if len(att_buffer) > 500:
+                        att_buffer.pop(0)
+                    continue
+
+                # 3. PROCESSAR A IMAGEM COM SINCRONIZAÇÃO PERFEITA
                 if channel.topic == topic_image:
-                    timestamp_ns = message.log_time
+                    if not gps_buffer or not att_buffer:
+                        continue  # Espera até termos telemetria
+
+                    # Encontrar a telemetria mais próxima do tempo da imagem
+                    target_time = msg_time - CAMERA_DELAY_NS
+
+                    best_gps = min(gps_buffer, key=lambda x: abs(x[0] - target_time))[1]
+                    best_att = min(att_buffer, key=lambda x: abs(x[0] - target_time))[1]
+
+                    # Atualizar o manager APENAS com a telemetria sincronizada
+                    node.map_manager.update_telemetry_from_msg(topic_gps, best_gps)
+                    node.map_manager.update_telemetry_from_msg(topic_attitude, best_att)
+
                     raw_image, calibrated_image = node.calibrator.process_frame(ros_msg.data)
 
                     if calibrated_image is None:
                         continue
 
-                    # Calcular tempos
-                    sec = int(timestamp_ns // 1e9)
-                    nanosec = int(timestamp_ns % 1e9)
+                    sec = int(msg_time // 1e9)
+                    nanosec = int(msg_time % 1e9)
 
                     # --- LÓGICA DO MAPA ---
-                    # Apenas pede o mapa se o calibrador já tiver calculado o f_final
                     if (
                         node.calibrator.f_final is not None
                         and node.map_manager.current_telemetry["lat"] != 0.0
@@ -102,19 +128,16 @@ def main(args: list[str] | None = None) -> None:
                     calibrated_image_msg.header.stamp.nanosec = nanosec
                     calibrated_image_msg.header.frame_id = "camera_link"
 
+                    node.image_pub.publish(calibrated_image_msg)
+
+                    # (O resto do teu código para a raw_image e o spin...)
                     raw_image_msg = node.bridge.cv2_to_imgmsg(raw_image, encoding="bgr8")
                     raw_image_msg.header.stamp.sec = sec
                     raw_image_msg.header.stamp.nanosec = nanosec
                     raw_image_msg.header.frame_id = "camera_link"
-
-                    node.image_pub.publish(calibrated_image_msg)
                     node.raw_image_pub.publish(raw_image_msg)
 
-                    rclpy.spin_once(
-                        node, timeout_sec=0.01
-                    )  # Um timeout curto para não parar o vídeo
-
-            node.get_logger().info("Fim do ficheiro MCAP atingido.")
+                    rclpy.spin_once(node, timeout_sec=0.001)
 
     except FileNotFoundError:
         node.get_logger().error(f"Ficheiro não encontrado: {input_file}")
