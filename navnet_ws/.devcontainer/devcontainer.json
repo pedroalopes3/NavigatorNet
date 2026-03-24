@@ -5,7 +5,7 @@
     },
     "workspaceFolder": "/workspace",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-    "forwardPorts": [8765], 
+    "forwardPorts": [9090], 
     "customizations": {
         "vscode": {
             "extensions": [
@@ -31,5 +31,5 @@
         }
     },
     "postCreateCommand": "apt-get update && rosdep update && rosdep install --from-paths src --ignore-src -y && colcon build",
-    "postStartCommand": "bash -c 'source /opt/ros/humble/setup.bash && nohup ros2 launch foxglove_bridge foxglove_bridge_launch.xml > /workspace/foxglove.log 2>&1 &'"
+    "postStartCommand": "bash -c 'source /opt/ros/humble/setup.bash && nohup ros2 launch rosbridge_server rosbridge_websocket_launch.xml > /workspace/rosbridge.log 2>&1 &'"
 }

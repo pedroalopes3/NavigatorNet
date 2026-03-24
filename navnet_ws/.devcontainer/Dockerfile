@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-cv-bridge \
     ros-humble-sensor-msgs-py \
     ros-humble-rosbag2-storage-mcap \
-    ros-humble-foxglove-bridge \
+    ros-humble-rosbridge-suite \
     nano \
     && rm -rf /var/lib/apt/lists/*
 
@@ -28,7 +28,10 @@ RUN uv pip install --system --no-cache \
     mcap-ros2-support \
     mypy \
     ruff \
-    pytest
+    pytest \
+    torch \
+    torchvision \
+    scipy
 
 WORKDIR /workspace
 

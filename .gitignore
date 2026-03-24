@@ -26,3 +26,4 @@ __pycache__/
 # --- OS JUNK ---
 .DS_Store
 Thumbs.db
+navnet_ws/tiles_output/
