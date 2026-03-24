@@ -20,7 +20,7 @@ setup(
     install_requires=["setuptools"],
     zip_safe=True,
     maintainer="root",
-    maintainer_email="pedpedroafdlopes@tecnico.ulisboa.pt",
+    maintainer_email="pedroafdlopes@tecnico.ulisboa.pt",
     description="TODO: Package description",
     license="TODO: License declaration",
     extras_require={
