@@ -1,6 +1,8 @@
 import os
 import sys
 
+import cv2
+import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
@@ -15,27 +17,27 @@ from navnet.matcher import SPGlueMatcher
 class NavNetNode(Node):
     def __init__(self) -> None:
         super().__init__("navnet_node")
-        self.get_logger().info("NavNet node started (Online/Subscriber Mode)")
+        self.get_logger().info("NavNet node started")
 
         self.bridge = CvBridge()
 
-        # --- 1. BUFFERS DE TELEMETRIA ---
+        # BUFFERS
         self.gps_buffer = []
         self.att_buffer = []
         self.CAMERA_DELAY_NS = 0
 
-        # --- 2. PUBLISHERS ---
+        # PUBLISHERS
         self.image_pub = self.create_publisher(Image, "/camera/image_calibrated", 10)
         self.raw_image_pub = self.create_publisher(Image, "/camera/image_raw", 10)
         self.map_pub = self.create_publisher(Image, "/camera/map_tile", 10)
+        self.matches_pub = self.create_publisher(Image, "/camera/matches", 10)
 
-        # --- 3. SUBSCRIBERS ---
-        # Agora o nó "ouve" o ROS em vez de ler o disco!
+        # SUBSCRIBERS
         self.create_subscription(GlobalPositionInt, "/global_position_int", self.gps_callback, 10)
         self.create_subscription(Attitude, "/attitude", self.att_callback, 10)
         self.create_subscription(CompressedImage, "/image/compressed", self.image_callback, 10)
 
-        # --- 4. INICIALIZAÇÃO DOS COMPONENTES ---
+        # INICIALIZAÇÃO DOS COMPONENTES
         K = [[896.602173, 0.0, 1003.954285], [0.0, 881.922974, 451.323334], [0.0, 0.0, 1.0]]
         D = [
             1.771178e00,
@@ -59,7 +61,36 @@ class NavNetNode(Node):
             self.get_logger().error(f"Falha ao carregar a IA: {e}")
 
     # ==========================================
-    # CALLBACKS DE TELEMETRIA
+    # FUNÇÃO DE DESENHO DOS MATCHES (OpenCV)
+    # ==========================================
+    def draw_matches(self, img1, img2, kp1, kp2):
+        h1, w1 = img1.shape[:2]
+        h2, w2 = img2.shape[:2]
+
+        h_max = max(h1, h2)
+        w_sum = w1 + w2
+        out_img = np.zeros((h_max, w_sum, 3), dtype=np.uint8)
+
+        if len(img1.shape) == 2:
+            img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
+        if len(img2.shape) == 2:
+            img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
+
+        out_img[:h1, :w1] = img1
+        out_img[:h2, w1 : w1 + w2] = img2
+
+        for i in range(kp1.shape[1]):
+            x1, y1 = int(kp1[0, i]), int(kp1[1, i])
+            x2, y2 = int(kp2[0, i]) + w1, int(kp2[1, i])
+
+            cv2.line(out_img, (x1, y1), (x2, y2), (0, 255, 0), 1)
+            cv2.circle(out_img, (x1, y1), 3, (0, 0, 255), -1)
+            cv2.circle(out_img, (x2, y2), 3, (255, 0, 0), -1)
+
+        return out_img
+
+    # ==========================================
+    # CALLBACKS
     # ==========================================
     def gps_callback(self, msg: GlobalPositionInt):
         t = self.get_clock().now().nanoseconds
@@ -74,24 +105,31 @@ class NavNetNode(Node):
             self.att_buffer.pop(0)
 
     # ==========================================
-    # CALLBACK DA CÂMARA (O Cérebro do Nó)
+    # CALLBACK DA CAMARA
     # ==========================================
     def image_callback(self, msg: CompressedImage):
         msg_time = self.get_clock().now().nanoseconds
 
-        # 1. Garantir que já temos telemetria antes de tentar alinhar o mapa
         if not self.gps_buffer or not self.att_buffer:
             return
 
-        # 2. Encontrar a telemetria sincronizada mais próxima no tempo
         target_time = msg_time - self.CAMERA_DELAY_NS
         best_gps = min(self.gps_buffer, key=lambda x: abs(x[0] - target_time))[1]
         best_att = min(self.att_buffer, key=lambda x: abs(x[0] - target_time))[1]
 
-        self.map_manager.update_telemetry_from_msg("/global_position_int", best_gps)
-        self.map_manager.update_telemetry_from_msg("/attitude", best_att)
+        lat_deg = best_gps.lat * 1e-7
+        lon_deg = best_gps.lon * 1e-7
+        alt_m = best_gps.relative_alt * 1e-3
+        heading_deg = best_gps.hdg * 1e-2
 
-        # 3. Processar a Imagem Raw
+        pitch_rad = best_att.pitch
+        roll_rad = best_att.roll
+
+        # Passar dados limpos (float) para o gestor de mapas
+        self.map_manager.update_gps(lat_deg, lon_deg, alt_m, heading_deg)
+        self.map_manager.update_attitude(pitch_rad, roll_rad)
+        # ----------------------------------------------------
+
         raw_image, calibrated_image = self.calibrator.process_frame(msg.data)
         if calibrated_image is None:
             return
@@ -99,7 +137,6 @@ class NavNetNode(Node):
         sec = int(msg_time // 1e9)
         nanosec = int(msg_time % 1e9)
 
-        # 4. Ir buscar o Mapa e passar pela IA
         if self.calibrator.f_final is not None and self.map_manager.current_telemetry["lat"] != 0.0:
             map_img, map_info = self.map_manager.get_map_for_telemetry(
                 f_final=self.calibrator.f_final
@@ -115,10 +152,19 @@ class NavNetNode(Node):
                 try:
                     kp1, kp2 = self.matcher.match(calibrated_image, map_img)
                     self.get_logger().info(f"Encontrados {kp1.shape[1]} matches com o SuperGlue!")
+
+                    if kp1.shape[1] > 0:
+                        matches_img = self.draw_matches(calibrated_image, map_img, kp1, kp2)
+                        matches_msg = self.bridge.cv2_to_imgmsg(matches_img, encoding="bgr8")
+                        matches_msg.header.stamp.sec = sec
+                        matches_msg.header.stamp.nanosec = nanosec
+                        matches_msg.header.frame_id = "camera_link"
+                        self.matches_pub.publish(matches_msg)
+
                 except Exception as e:
                     self.get_logger().error(f"Erro a processar a frame na IA: {e}")
 
-        # 5. Publicar imagens da câmara (Raw e Calibrada)
+        # Publicar imagens da câmara normais
         calibrated_image_msg = self.bridge.cv2_to_imgmsg(calibrated_image, encoding="bgr8")
         calibrated_image_msg.header.stamp.sec = sec
         calibrated_image_msg.header.stamp.nanosec = nanosec
@@ -136,8 +182,6 @@ def main(args=None) -> None:
     rclpy.init(args=args)
     node = NavNetNode()
 
-    # Em vez de ler do disco, o nó fica a girar (spin) num ciclo infinito
-    # à espera que algum publisher (como o rosbag) dispare os Callbacks!
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
