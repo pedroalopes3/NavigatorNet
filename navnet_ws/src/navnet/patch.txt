@@ -1,0 +1,28 @@
+--- OLD
+        # --- ADICIONADO: Inicializar as redes neuronais ---
+        try:
+            pkg_dir = get_package_share_directory('naziv')
+            weights_dir = os.path.join(pkg_dir, 'weights')
+            self.matcher = SPGlueMatcher(weights_dir=weights_dir)
+            self.get_logger().info("Redes SuperPoint e SuperGlue iniciadas com sucesso!")
+        except Exception as e:
+            self.get_logger().error(f"Falha ao carregar ficheiros .pth: {e}")
+
+--- NEW  
+        # --- ADICIONADO: Inicializar as redes neuronais ---
+        try:
+            try:
+                pkg_dir = get_package_share_directory('naziv')
+                weights_dir = os.path.join(pkg_dir, 'weights')
+            except:
+                # Fallback: use expected installation path
+                weights_dir = "/workspace/install/naziv/share/naziv/weights"
+                if not os.path.exists(weights_dir):
+                    weights_dir = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'share', 'naziv', 'weights')
+            
+            self.matcher = SPGlueMatcher(weights_dir=weights_dir)
+            self.get_logger().info(f"Redes inicializadas de: {weights_dir}")
+        except Exception as e:
+            self.get_logger().error(f"Falha ao carregar ficheiros .pth: {e}")
+            import traceback
+            self.get_logger().error(traceback.format_exc())

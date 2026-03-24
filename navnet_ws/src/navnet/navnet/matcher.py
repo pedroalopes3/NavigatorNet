@@ -1,56 +1,40 @@
 import os
-import cv2
-import torch
-import numpy as np
 
-# NOTA: Assumimos que colocaste as implementações oficiais da MagicLeap
-# (superpoint.py e superglue.py) dentro da pasta 'models'
-from .models.superpoint import SuperPoint
+import cv2
+import numpy as np
+import torch
+
 from .models.superglue import SuperGlue
 
+# NOTA: Assumimos que as implementações oficiais da MagicLeap
+# (superpoint.py e superglue.py) estão dentro da pasta 'models'
+from .models.superpoint import SuperPoint
+
+
 class SPGlueMatcher:
-    def __init__(self, weights_dir: str):
+    def __init__(self):
         """
         Inicializa o SuperPoint e SuperGlue.
-        :param weights_dir: Caminho absoluto para a pasta onde estão os .pth pré-descarregados.
         """
         # Escolhe o GPU se existir, senão usa o CPU (útil para testar no PC e depois passar para o Jetson)
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[SPGlueMatcher] A inicializar modelos no dispositivo: {self.device}")
-
-        # Caminhos absolutos para os ficheiros de pesos
-        sp_weights_path = os.path.join(weights_dir, 'superpoint_v1.pth')
-        sg_weights_path = os.path.join(weights_dir, 'superglue_outdoor.pth')
-
-        # Verificação de segurança (crashar na inicialização é melhor que no ar)
-        if not os.path.exists(sp_weights_path):
-            raise FileNotFoundError(f"Pesos do SuperPoint não encontrados em: {sp_weights_path}")
-        if not os.path.exists(sg_weights_path):
-            raise FileNotFoundError(f"Pesos do SuperGlue não encontrados em: {sg_weights_path}")
 
         # Configurações padrão (podes ajustar para performance no Jetson Nano)
         self.config = {
-            'superpoint': {
-                'nms_radius': 4,
-                'keypoint_threshold': 0.005,
-                'max_keypoints': 1024
+            "superpoint": {"nms_radius": 4, "keypoint_threshold": 0.005, "max_keypoints": 1024},
+            "superglue": {
+                "weights": "outdoor",  # 'indoor' ou 'outdoor'
+                "sinkhorn_iterations": 20,
+                "match_threshold": 0.2,
             },
-            'superglue': {
-                'weights': 'outdoor', # 'indoor' ou 'outdoor'
-                'sinkhorn_iterations': 20,
-                'match_threshold': 0.2,
-            }
         }
 
-        # 1. Instanciar os modelos
-        self.superpoint = SuperPoint(self.config['superpoint']).to(self.device)
-        self.superglue = SuperGlue(self.config['superglue']).to(self.device)
+        # 1. Instanciar os modelos (Eles vão carregar os pesos automaticamente da sua própria pasta)
+        self.superpoint = SuperPoint(self.config["superpoint"]).to(self.device)
+        self.superglue = SuperGlue(self.config["superglue"]).to(self.device)
 
-        # 2. Carregar os pesos locais estáticos
-        self.superpoint.load_state_dict(torch.load(sp_weights_path, map_location=self.device))
-        self.superglue.load_state_dict(torch.load(sg_weights_path, map_location=self.device))
-
-        # 3. Bloquear os modelos em modo de inferência (muito importante para não gastar RAM)
+        # 2. Bloquear os modelos em modo de inferência (muito importante para não gastar RAM)
         self.superpoint.eval()
         self.superglue.eval()
 
@@ -60,15 +44,15 @@ class SPGlueMatcher:
         """
         if len(img.shape) == 3:
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
+
         # O SuperPoint precisa que os pixeis estejam entre 0.0 e 1.0 (float32)
         img_float = img.astype(np.float32) / 255.0
-        
+
         # Adicionar as dimensões de Batch (1) e Canal (1)
         tensor = torch.from_numpy(img_float)[None, None].to(self.device)
         return tensor
 
-    @torch.no_grad() # Desliga o cálculo de gradientes para dobrar a velocidade de execução
+    @torch.no_grad()  # Desliga o cálculo de gradientes para dobrar a velocidade de execução
     def match(self, img1: np.ndarray, img2: np.ndarray):
         """
         Executa o pipeline completo.
@@ -81,32 +65,33 @@ class SPGlueMatcher:
         tensor2 = self._preprocess_image(img2)
 
         # Extrair keypoints e descritores com o SuperPoint
-        pred1 = self.superpoint({'image': tensor1})
-        pred2 = self.superpoint({'image': tensor2})
+        pred1 = self.superpoint({"image": tensor1})
+        pred2 = self.superpoint({"image": tensor2})
 
         # Preparar o dicionário gigante de dados que o SuperGlue exige
         data = {
-            'image0': tensor1, 'image1': tensor2,
-            'keypoints0': pred1['keypoints'][0].unsqueeze(0),
-            'keypoints1': pred2['keypoints'][0].unsqueeze(0),
-            'scores0': pred1['scores'][0].unsqueeze(0),
-            'scores1': pred2['scores'][0].unsqueeze(0),
-            'descriptors0': pred1['descriptors'][0].unsqueeze(0),
-            'descriptors1': pred2['descriptors'][0].unsqueeze(0),
+            "image0": tensor1,
+            "image1": tensor2,
+            "keypoints0": pred1["keypoints"][0].unsqueeze(0),
+            "keypoints1": pred2["keypoints"][0].unsqueeze(0),
+            "scores0": pred1["scores"][0].unsqueeze(0),
+            "scores1": pred2["scores"][0].unsqueeze(0),
+            "descriptors0": pred1["descriptors"][0].unsqueeze(0),
+            "descriptors1": pred2["descriptors"][0].unsqueeze(0),
         }
 
         # Fazer o match das características com o SuperGlue
         pred = self.superglue(data)
 
         # Extrair os índices e filtrar apenas os "matches" válidos (onde índice > -1)
-        matches = pred['matches0'][0].cpu().numpy()
+        matches = pred["matches0"][0].cpu().numpy()
         valid = matches > -1
 
         # Obter as coordenadas físicas (X, Y) dos pixeis originais
-        mkpts1 = pred1['keypoints'][0].cpu().numpy()[valid]
-        mkpts2 = pred2['keypoints'][0].cpu().numpy()[matches[valid]]
+        mkpts1 = pred1["keypoints"][0].cpu().numpy()[valid]
+        mkpts2 = pred2["keypoints"][0].cpu().numpy()[matches[valid]]
 
-        # O output atual é [N, 2]. Fazemos a transposta (.T) para ficar no formato [2, N] que pediste!
+        # O output atual é [N, 2]. Fazemos a transposta (.T) para ficar no formato [2, N]
         kp1_out = mkpts1.T
         kp2_out = mkpts2.T
 

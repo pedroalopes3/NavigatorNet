@@ -1,0 +1,73 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from vbn_ros_msgs/msg/ScaledIMU.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module vbn_ros_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Message associated with the MAVLINK msg SCALED_IMU. See https://mavlink.io/en/messages/common.html#SCALED_IMU")
+    struct ScaledIMU {
+      @verbatim (language="comment", text=
+        "The RAW IMU readings for 9DOF sensor setup. This message should contain the scaled values to the described units" "\n"
+        "Header - this will contain the ROS timestamp")
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "Timestamp (time since system boot).")
+      @unit (value="ms")
+      uint64 time_boot_ms;
+
+      @verbatim (language="comment", text=
+        "X acceleration")
+      @unit (value="mG")
+      int16 xacc;
+
+      @verbatim (language="comment", text=
+        "Y acceleration")
+      @unit (value="mG")
+      int16 yacc;
+
+      @verbatim (language="comment", text=
+        "Z acceleration")
+      @unit (value="mG")
+      int16 zacc;
+
+      @verbatim (language="comment", text=
+        "Angular speed around X axis")
+      @unit (value="mrad/s")
+      int16 xgyro;
+
+      @verbatim (language="comment", text=
+        "Angular speed around Y axis")
+      @unit (value="mrad/s")
+      int16 ygyro;
+
+      @verbatim (language="comment", text=
+        "Angular speed around Z axis")
+      @unit (value="mrad/s")
+      int16 zgyro;
+
+      @verbatim (language="comment", text=
+        "X Magnetic field")
+      @unit (value="mgauss")
+      int16 xmag;
+
+      @verbatim (language="comment", text=
+        "Y Magnetic field")
+      @unit (value="mgauss")
+      int16 ymag;
+
+      @verbatim (language="comment", text=
+        "Z Magnetic field")
+      @unit (value="mgauss")
+      int16 zmag;
+
+      @verbatim (language="comment", text=
+        "Temperature, 0: IMU does not provide temperature values. If the IMU is at 0C it must send 1 (0.01C).")
+      @unit (value="cdegC")
+      int16 temperature;
+    };
+  };
+};

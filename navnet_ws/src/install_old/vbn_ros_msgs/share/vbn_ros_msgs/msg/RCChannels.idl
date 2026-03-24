@@ -1,0 +1,69 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from vbn_ros_msgs/msg/RCChannels.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module vbn_ros_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Message associated with the MAVLINK msg RC_CHANNELS. See https://mavlink.io/en/messages/common.html#RC_CHANNELS")
+    struct RCChannels {
+      @verbatim (language="comment", text=
+        "The PPM values of the RC channels received. The standard PPM modulation is as follows: 1000 microseconds: 0%, 2000 microseconds: 100%." "\n"
+        "A value of UINT16_MAX implies the channel is unused. Individual receivers/transmitters might violate this specification." "\n"
+        "Header - this will contain the ROS timestamp")
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "Timestamp (time since system boot).")
+      @unit (value="ms")
+      uint32 time_boot_ms;
+
+      @verbatim (language="comment", text=
+        "Total number of RC channels being received. This can be larger than 18, indicating that more channels are available but not given in this message. This value should be 0 when no RC channels are available.")
+      uint8 chancount;
+
+      uint16 chan1_raw;
+
+      uint16 chan2_raw;
+
+      uint16 chan3_raw;
+
+      uint16 chan4_raw;
+
+      uint16 chan5_raw;
+
+      uint16 chan6_raw;
+
+      uint16 chan7_raw;
+
+      uint16 chan8_raw;
+
+      uint16 chan9_raw;
+
+      uint16 chan10_raw;
+
+      uint16 chan11_raw;
+
+      uint16 chan12_raw;
+
+      uint16 chan13_raw;
+
+      uint16 chan14_raw;
+
+      uint16 chan15_raw;
+
+      uint16 chan16_raw;
+
+      uint16 chan17_raw;
+
+      uint16 chan18_raw;
+
+      @verbatim (language="comment", text=
+        "Receive signal strength indicator in device-dependent units/scale. Values:, UINT8_MAX: invalid/unknown.")
+      @unit (value="0-254")
+      uint8 rssi;
+    };
+  };
+};

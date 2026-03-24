@@ -1,13 +1,14 @@
-import sys
 import os
+import sys
 
 import rclpy
+
+# from ament_index_python.packages import get_package_share_directory
 from cv_bridge import CvBridge
 from mcap.reader import make_reader
 from mcap_ros2.decoder import DecoderFactory
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from ament_index_python.packages import get_package_share_directory
 
 from navnet.image_preprocessing import CameraCalibrator
 from navnet.map_manager import MapRepoManager
@@ -20,7 +21,7 @@ class NavNetNode(Node):
         self.get_logger().info("NavNet node started")
 
         self.bridge = CvBridge()
-        
+
         # Criação dos Publishers
         self.image_pub = self.create_publisher(Image, "/camera/image_calibrated", 10)
         self.raw_image_pub = self.create_publisher(Image, "/camera/image_raw", 10)
@@ -42,14 +43,12 @@ class NavNetNode(Node):
         self.calibrator = CameraCalibrator(K_matrix=K, D_coeffs=D, alpha=0.2)
 
         # Inicializa o mapa
-        self.map_manager = MapRepoManager("/workspace/bags/tiles_output")
+        self.map_manager = MapRepoManager("/workspace/tiles_output")
         self.map_manager.analyze()
 
-        # --- ADICIONADO: Inicializar as redes neuronais ---
+        # --- Inicializar as redes neuronais ---
         try:
-            pkg_dir = get_package_share_directory('navnet')
-            weights_dir = os.path.join(pkg_dir, 'weights')
-            self.matcher = SPGlueMatcher(weights_dir=weights_dir)
+            self.matcher = SPGlueMatcher()
             self.get_logger().info("Redes SuperPoint e SuperGlue iniciadas com sucesso!")
         except Exception as e:
             self.get_logger().error(f"Falha ao carregar ficheiros .pth: {e}")
@@ -137,7 +136,9 @@ def main(args: list[str] | None = None) -> None:
                             # --- ADICIONADO: EXTRAIR MATCHES ---
                             try:
                                 kp1, kp2 = node.matcher.match(calibrated_image, map_img)
-                                node.get_logger().info(f"Encontrados {kp1.shape[1]} matches com o SuperGlue!")
+                                node.get_logger().info(
+                                    f"Encontrados {kp1.shape[1]} matches com o SuperGlue!"
+                                )
                             except Exception as e:
                                 node.get_logger().error(f"Erro a processar a frame na IA: {e}")
                             # -----------------------------------
