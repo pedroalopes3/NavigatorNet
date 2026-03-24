@@ -1,4 +1,0 @@
-# generated from rosidl_cmake/cmake/rosidl_cmake-extras.cmake.in
-
-set(vbn_ros_msgs_IDL_FILES "msg/AHRS.idl;msg/AOASSA.idl;msg/Attitude.idl;msg/EKFStatusReport.idl;msg/EulerStamped.idl;msg/GlobalPositionInt.idl;msg/GPS2Raw.idl;msg/GPSRawInt.idl;msg/RawIMU.idl;msg/RCChannels.idl;msg/ScaledIMU.idl;msg/TileCoordinate.idl;msg/TileCoordinatesList.idl;msg/VisionNavigationAutopilotInfo.idl;msg/VisionNavigationEstimation.idl;msg/Wind.idl")
-set(vbn_ros_msgs_INTERFACE_FILES "msg/AHRS.msg;msg/AOASSA.msg;msg/Attitude.msg;msg/EKFStatusReport.msg;msg/EulerStamped.msg;msg/GlobalPositionInt.msg;msg/GPS2Raw.msg;msg/GPSRawInt.msg;msg/RawIMU.msg;msg/RCChannels.msg;msg/ScaledIMU.msg;msg/TileCoordinate.msg;msg/TileCoordinatesList.msg;msg/VisionNavigationAutopilotInfo.msg;msg/VisionNavigationEstimation.msg;msg/Wind.msg")

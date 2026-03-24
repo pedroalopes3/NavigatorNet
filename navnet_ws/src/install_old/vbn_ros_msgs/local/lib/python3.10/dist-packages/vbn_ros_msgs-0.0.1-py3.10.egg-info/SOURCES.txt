@@ -1,6 +1,0 @@
-setup.py
-vbn_ros_msgs/__init__.py
-vbn_ros_msgs.egg-info/PKG-INFO
-vbn_ros_msgs.egg-info/SOURCES.txt
-vbn_ros_msgs.egg-info/dependency_links.txt
-vbn_ros_msgs.egg-info/top_level.txt
