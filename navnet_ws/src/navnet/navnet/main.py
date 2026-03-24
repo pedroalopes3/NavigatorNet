@@ -7,7 +7,7 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage, Image
-from vbn_ros_msgs.msg import Attitude, GlobalPositionInt
+from vbn_ros_msgs.msg import Attitude, GlobalPositionInt, GPSRawInt
 
 from navnet.image_preprocessing import CameraCalibrator
 from navnet.map_manager import MapRepoManager
@@ -92,7 +92,7 @@ class NavNetNode(Node):
     # ==========================================
     # CALLBACKS
     # ==========================================
-    def gps_callback(self, msg: GlobalPositionInt):
+    def gps_callback(self, msg: GPSRawInt):
         t = self.get_clock().now().nanoseconds
         self.gps_buffer.append((t, msg))
         if len(self.gps_buffer) > 500:
