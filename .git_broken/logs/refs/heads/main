@@ -1,0 +1,17 @@
+3fefab699713fa0eb1ea23bbf6405b1b51024f11 24970634a7778e307b6704098121e81e2eac2893 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1771856704 +0000	commit: new docker
+24970634a7778e307b6704098121e81e2eac2893 b8f06c719aa3fd2253d50fda376666b915f16f2c pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1771858881 +0000	commit (amend): new docker
+b8f06c719aa3fd2253d50fda376666b915f16f2c fdede3fd3212c4b5f56c40d2e3a4845ab8332bdf pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1771862522 +0000	pull: Fast-forward
+fdede3fd3212c4b5f56c40d2e3a4845ab8332bdf 2300b6c7045ff32394c0e19d41a15aa82d8eba8c pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1773757938 +0000	commit: new python dependecies for project mgmt
+2300b6c7045ff32394c0e19d41a15aa82d8eba8c 32ae5f9254147dcf5b0370579d26873177b8f4e4 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1773757997 +0000	pull (finish): refs/heads/main onto d0bcfbb3cae44b96f2f0547a4da69ce40a342307
+32ae5f9254147dcf5b0370579d26873177b8f4e4 7392c7530ee3c2304f034da5e40e96599d2a1d08 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1773768032 +0000	commit: online image distort inside docker / map handler / tiles offline downloader
+7392c7530ee3c2304f034da5e40e96599d2a1d08 a7711c7cbee0e08b9859acd93fa427263b043398 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1773768330 +0000	pull origin main (finish): refs/heads/main onto 788287437a8b5cab313f3f3824a248747b7be55f
+a7711c7cbee0e08b9859acd93fa427263b043398 093372464abef87238ec29578745165167f2b50b pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774236467 +0000	pull: Fast-forward
+093372464abef87238ec29578745165167f2b50b 26005da86c6e4585a69acd50294edec9915c97b5 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774354407 +0000	commit: para o miguel beijinho pedro
+26005da86c6e4585a69acd50294edec9915c97b5 a60effa2920a6ca2978ecd3334d67bc2c71c8374 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774355379 +0000	commit (amend): para o miguel beijinho pedro
+a60effa2920a6ca2978ecd3334d67bc2c71c8374 1cbeaaf7c0232b2fcbaee582773339e088c14d5d pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774364334 +0000	commit: matching working
+1cbeaaf7c0232b2fcbaee582773339e088c14d5d e67cbc25c3784b85cd6385da62b4716c31fe58d6 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774366681 +0000	commit: pipeline capabale of offline and online running / launcher: ROS sourcing + navnet pipeline + foxglove rosbridge
+e67cbc25c3784b85cd6385da62b4716c31fe58d6 a5b74d15eb9879a05d590e6d60be1a4acf27ecf3 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774367055 +0000	pull origin main --rebase (finish): refs/heads/main onto 115329db6786082fa5dee4c910c72019eb46ba2e
+a5b74d15eb9879a05d590e6d60be1a4acf27ecf3 e82fb79fd4d2bb5f0db2e03cf2dd86098dc188bc pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774369986 +0000	commit: publishing and subscribing all done in main.py
+e82fb79fd4d2bb5f0db2e03cf2dd86098dc188bc 2ced5d31603a734196e001a9b7fb6cad0f03daa4 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774375084 +0000	commit: docker gpu acess fix
+2ced5d31603a734196e001a9b7fb6cad0f03daa4 a7320a9c7c61ca7cbc646752a763780332c12668 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774375094 +0000	commit: docker gpu acess fix
+a7320a9c7c61ca7cbc646752a763780332c12668 da56b612c7b5ade67a9682564694abc7150d52a6 pedroalopes3 <pedpedroafdlopes@tecnico.ulisboa.pt> 1774376954 +0000	commit: get coordinates from gps raw msg

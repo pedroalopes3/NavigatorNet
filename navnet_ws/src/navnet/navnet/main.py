@@ -33,7 +33,7 @@ class NavNetNode(Node):
         self.matches_pub = self.create_publisher(Image, "/camera/matches", 10)
 
         # SUBSCRIBERS
-        self.create_subscription(GlobalPositionInt, "/global_position_int", self.gps_callback, 10)
+        self.create_subscription(GPSRawInt, "/gps_raw_int", self.gps_callback, 10)
         self.create_subscription(Attitude, "/attitude", self.att_callback, 10)
         self.create_subscription(CompressedImage, "/image/compressed", self.image_callback, 10)
 

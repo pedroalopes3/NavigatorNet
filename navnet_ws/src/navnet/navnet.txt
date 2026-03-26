@@ -1,0 +1,44 @@
+.
+├── launch
+│   └── navnet_launch.py
+├── navnet
+│   ├── image_preprocessing.py
+│   ├── __init__.py
+│   ├── main.py
+│   ├── map_manager.py
+│   ├── matcher.py
+│   ├── models
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   ├── superglue.cpython-310.pyc
+│   │   │   └── superpoint.cpython-310.pyc
+│   │   ├── superglue.py
+│   │   ├── superpoint.py
+│   │   └── weights
+│   │       ├── superglue_outdoor.pth
+│   │       └── superpoint_v1.pth
+│   └── __pycache__
+│       ├── image_preprocessing.cpython-310.pyc
+│       ├── __init__.cpython-310.pyc
+│       ├── main.cpython-310.pyc
+│       ├── map_manager.cpython-310.pyc
+│       └── matcher.cpython-310.pyc
+├── navnet.txt
+├── package.xml
+├── patch.txt
+├── pyproject.toml
+├── resource
+│   └── navnet
+├── setup.cfg
+├── setup.py
+└── test
+    ├── __pycache__
+    │   ├── test_copyright.cpython-310-pytest-9.0.2.pyc
+    │   ├── test_flake8.cpython-310-pytest-9.0.2.pyc
+    │   └── test_pep257.cpython-310-pytest-9.0.2.pyc
+    ├── test_copyright.py
+    ├── test_flake8.py
+    └── test_pep257.py
+
+10 directories, 32 files
