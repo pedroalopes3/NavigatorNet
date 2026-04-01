@@ -22,10 +22,10 @@ class SPGlueMatcher:
 
         # Configurações padrão (podes ajustar para performance no Jetson Nano)
         self.config = {
-            "superpoint": {"nms_radius": 4, "keypoint_threshold": 0.005, "max_keypoints": 1024},
+            "superpoint": {"nms_radius": 4, "keypoint_threshold": 0.0005, "max_keypoints": 4096},
             "superglue": {
                 "weights": "outdoor",  # 'indoor' ou 'outdoor'
-                "sinkhorn_iterations": 20,
+                "sinkhorn_iterations": 50,
                 "match_threshold": 0.2,
             },
         }

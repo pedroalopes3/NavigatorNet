@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 
@@ -7,7 +8,7 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage, Image
-from vbn_ros_msgs.msg import Attitude, GlobalPositionInt, GPSRawInt
+from vbn_ros_msgs.msg import Attitude, GPSRawInt
 
 from navnet.image_preprocessing import CameraCalibrator
 from navnet.map_manager import MapRepoManager
@@ -119,8 +120,10 @@ class NavNetNode(Node):
 
         lat_deg = best_gps.lat * 1e-7
         lon_deg = best_gps.lon * 1e-7
-        alt_m = best_gps.relative_alt * 1e-3
-        heading_deg = best_gps.hdg * 1e-2
+        alt_m = best_gps.alt * 1e-3
+        heading_deg = math.degrees(best_att.yaw)
+        if heading_deg < 0:
+            heading_deg += 360.0
 
         pitch_rad = best_att.pitch
         roll_rad = best_att.roll
