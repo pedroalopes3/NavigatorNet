@@ -24,7 +24,7 @@ class SPGlueMatcher:
         self.config = {
             "superpoint": {"nms_radius": 4, "keypoint_threshold": 0.0005, "max_keypoints": 4096},
             "superglue": {
-                "weights": "outdoor",  # 'indoor' ou 'outdoor'
+                "weights": "outdoor", 
                 "sinkhorn_iterations": 50,
                 "match_threshold": 0.2,
             },

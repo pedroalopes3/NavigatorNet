@@ -158,6 +158,18 @@ class NavNetNode(Node):
 
                     if kp1.shape[1] > 0:
                         matches_img = self.draw_matches(calibrated_image, map_img, kp1, kp2)
+                        m_este, m_norte = self.map_manager.get_matches_in_meters(kp2, map_info)
+                        num_pontos = kp1.shape[1]
+                        media_este = np.mean(m_este)
+                        media_norte = np.mean(m_norte)
+
+                        self.get_logger().info(
+                            f"\n--- MATCHES MÉTRICOS --- \n"
+                            f"Total Encontrados: {num_pontos}\n"
+                            f"Match #0: Este {m_este[0]:.2f}m | Norte {m_norte[0]:.2f}m\n"
+                            f"Centroide (Média): Este {media_este:.2f}m | Norte {media_norte:.2f}m"
+                        )
+
                         matches_msg = self.bridge.cv2_to_imgmsg(matches_img, encoding="bgr8")
                         matches_msg.header.stamp.sec = sec
                         matches_msg.header.stamp.nanosec = nanosec
