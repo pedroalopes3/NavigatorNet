@@ -8,11 +8,13 @@ import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage, Image
+from std_msgs.msg import String
 from vbn_ros_msgs.msg import Attitude, GPSRawInt
 
 from navnet.image_preprocessing import CameraCalibrator
 from navnet.map_manager import MapRepoManager
 from navnet.matcher import SPGlueMatcher
+from navnet.pnp import PnPSolver
 
 
 class NavNetNode(Node):
@@ -32,6 +34,7 @@ class NavNetNode(Node):
         self.raw_image_pub = self.create_publisher(Image, "/camera/image_raw", 10)
         self.map_pub = self.create_publisher(Image, "/camera/map_tile", 10)
         self.matches_pub = self.create_publisher(Image, "/camera/matches", 10)
+        self.norm_matches_pub = self.create_publisher(String, "/matches_normalized", 10)
 
         # SUBSCRIBERS
         self.create_subscription(GPSRawInt, "/gps_raw_int", self.gps_callback, 10)
@@ -40,6 +43,8 @@ class NavNetNode(Node):
 
         # INICIALIZAÇÃO DOS COMPONENTES
         K = [[896.602173, 0.0, 1003.954285], [0.0, 881.922974, 451.323334], [0.0, 0.0, 1.0]]
+
+        #
         D = [
             1.771178e00,
             3.254712e00,
@@ -51,6 +56,7 @@ class NavNetNode(Node):
             1.042681e00,
         ]
         self.calibrator = CameraCalibrator(K_matrix=K, D_coeffs=D, alpha=0.2)
+        self.pnp_solver = PnPSolver(K, D)
 
         self.map_manager = MapRepoManager("/workspace/tiles_output")
         self.map_manager.analyze()
@@ -153,23 +159,95 @@ class NavNetNode(Node):
                 self.map_pub.publish(map_image_msg)
 
                 try:
-                    kp1, kp2 = self.matcher.match(calibrated_image, map_img)
-                    self.get_logger().info(f"Encontrados {kp1.shape[1]} matches com o SuperGlue!")
+                    # ==========================================
+                    # 1. RESIZE PARA A IA (Ajustado para não cegar a IA)
+                    # ==========================================
+                    h_cam, w_cam = calibrated_image.shape[:2]
+                    h_map, w_map = map_img.shape[:2]
 
-                    if kp1.shape[1] > 0:
-                        matches_img = self.draw_matches(calibrated_image, map_img, kp1, kp2)
+                    # Escala 1.0 significa resolução original.
+                    # Se o Jetson Nano ficar muito lento, tenta 1.2 ou 1.5 no máximo.
+                    scale_cam = 1.0
+                    scale_map = 1.0
+
+                    new_w_cam, new_h_cam = int(w_cam / scale_cam), int(h_cam / scale_cam)
+                    new_w_map, new_h_map = int(w_map / scale_map), int(h_map / scale_map)
+
+                    cam_leve = cv2.resize(calibrated_image, (new_w_cam, new_h_cam))
+                    map_leve = cv2.resize(map_img, (new_w_map, new_h_map))
+
+                    # Passar as imagens para a IA
+                    kp1_small, kp2_small = self.matcher.match(cam_leve, map_leve)
+
+                    num_pontos = kp1_small.shape[1]
+
+                    if num_pontos > 0:
+                        # ==========================================
+                        # 2. RESTAURAR ESCALA E CALCULAR METROS
+                        # ==========================================
+                        kp1 = kp1_small * scale_cam
+                        kp2 = kp2_small * scale_map
+
+                        # Usar a função rápida da memória cache A Priori
                         m_este, m_norte = self.map_manager.get_matches_in_meters(kp2, map_info)
-                        num_pontos = kp1.shape[1]
-                        media_este = np.mean(m_este)
-                        media_norte = np.mean(m_norte)
 
                         self.get_logger().info(
-                            f"\n--- MATCHES MÉTRICOS --- \n"
-                            f"Total Encontrados: {num_pontos}\n"
-                            f"Match #0: Este {m_este[0]:.2f}m | Norte {m_norte[0]:.2f}m\n"
-                            f"Centroide (Média): Este {media_este:.2f}m | Norte {media_norte:.2f}m"
+                            f"\n--- LISTA DE TODOS OS {num_pontos} MATCHES MÉTRICOS ---"
+                        )
+                        # Imprimir apenas os primeiros 3 matches para não inundar o terminal
+                        for i in range(min(num_pontos, 3)):
+                            self.get_logger().info(
+                                f"Match #{i}: Este {m_este[i]:.2f}m | Norte {m_norte[i]:.2f}m"
+                            )
+                        self.get_logger().info(
+                            "--------------------------------------------------\n"
                         )
 
+                        # Desenhar os matches para o Foxglove
+                        matches_img = self.draw_matches(calibrated_image, map_img, kp1, kp2)
+
+                        # ==========================================
+                        #              PnP   +    Ransac
+                        # ==========================================
+                        # pnp exige pelo menos 4 pontos
+                        if num_pontos >= 4:
+                            sucesso, posicao_drone, inliers = self.pnp_solver.solve(
+                                kp1, m_este, m_norte
+                            )
+
+                            if sucesso:
+                                drone_x_este, drone_y_norte, drone_z_alt = posicao_drone
+
+                                lat_origem = self.map_manager.map_origin_lat
+                                lon_origem = self.map_manager.map_origin_lon
+                                raio_terra = self.map_manager.EARTH_RADIUS
+
+                                # inversas (metros -> graus)
+                                delta_lat_rad = drone_y_norte / raio_terra
+                                delta_lon_rad = drone_x_este / (
+                                    raio_terra * math.cos(math.radians(lat_origem))
+                                )
+
+                                calc_lat = lat_origem + math.degrees(delta_lat_rad)
+                                calc_lon = lon_origem + math.degrees(delta_lon_rad)
+
+                                self.get_logger().info(
+                                    f"\n Pnp ransac\n"
+                                    f"Inliers do RANSAC: {len(inliers)}/{num_pontos}\n"
+                                    f"GPS Sensor: Lat {lat_deg:.6f}, Lon {lon_deg:.6f}\n"
+                                    f"Estimativa: Lat {calc_lat:.6f}, Lon {calc_lon:.6f}\n"
+                                    f"Altitude Visual: {drone_z_alt:.1f}m\n"
+                                )
+                            else:
+                                self.get_logger().warn(
+                                    "Aviso: RANSAC rejeitou a geometria. Posição não resolvida."
+                                )
+                        else:
+                            self.get_logger().warn(
+                                f"Aviso: Apenas {num_pontos} matches encontrados. O PnP exige pelo menos 4."
+                            )
+
+                        # Publicar a imagem no ROS
                         matches_msg = self.bridge.cv2_to_imgmsg(matches_img, encoding="bgr8")
                         matches_msg.header.stamp.sec = sec
                         matches_msg.header.stamp.nanosec = nanosec

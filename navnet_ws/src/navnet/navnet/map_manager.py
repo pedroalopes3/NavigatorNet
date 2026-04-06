@@ -51,6 +51,8 @@ class MapRepoManager:
             print(f"Erro: O diretório '{self.repo_path}' não existe.")
             return
 
+        self.tile_metric_cache = {}
+
         for item in os.listdir(self.repo_path):
             zoom_dir = os.path.join(self.repo_path, item)
 
@@ -92,6 +94,8 @@ class MapRepoManager:
                         real_ppm = self.calculate_theoretical_ppm(center_lat, zoom, high_res)
 
                         self.zoom_info[zoom] = {"base_ppm": real_ppm, "high_res": high_res}
+
+        self._precompute_tile_metrics()
 
         self.analyzed = True
         self._print_summary()
@@ -276,3 +280,79 @@ class MapRepoManager:
         }
 
         return map_img, info
+
+    def get_matches_in_meters(self, kp2_array, map_info):
+        zoom = map_info["zoom"]
+        mpp = 1.0 / map_info["map_ppm"]
+
+        # Identificar qual é o tile no canto Top-Left do nosso mosaico atual
+        tile_x = map_info["tile_x"]
+        tile_y = map_info["tile_y"]
+        bounds = mercantile.bounds(tile_x, tile_y, zoom)
+        center_lat = (bounds.north + bounds.south) / 2.0
+        center_lon = (bounds.east + bounds.west) / 2.0
+
+        dir_x = 1 if map_info["inc_lon"] >= center_lon else -1
+        dir_y = 1 if map_info["inc_lat"] <= center_lat else -1
+
+        tl_tile_x = tile_x if dir_x == 1 else tile_x - 1
+        tl_tile_y = tile_y if dir_y == 1 else tile_y - 1
+
+        # Ir buscar as coordenadas base deste tile à cache
+        m_tile_este, m_tile_norte = self.tile_metric_cache.get(
+            (zoom, tl_tile_x, tl_tile_y), (0.0, 0.0)
+        )
+
+        # Arrays NumPy: Matemática sem latência
+        px_x = kp2_array[0, :]
+        px_y = kp2_array[1, :]
+
+        # Adicionar o offset do pixel (O eixo Y cresce para baixo, logo subtraímos)
+        matches_este_m = m_tile_este + (px_x * mpp)
+        matches_norte_m = m_tile_norte - (px_y * mpp)
+
+        return matches_este_m, matches_norte_m
+
+    def _precompute_tile_metrics(self):
+        """
+        Pré-calcula a posição métrica (Este, Norte) do canto superior esquerdo
+        de cada tile em relação ao Ponto Zero (Noroeste da Bounding Box Global).
+        """
+        if self.global_bbox["west"] == float("inf"):
+            print("[MapManager] Bounding box inválida. A ignorar o pré-cálculo métrico.")
+            return
+
+        # 1. Definir o Ponto Zero do mapa (0,0)
+        self.map_origin_lat = self.global_bbox["north"]
+        self.map_origin_lon = self.global_bbox["west"]
+
+        print("\n[MapManager] A pré-calcular coordenadas métricas 'A Priori'...")
+
+        # 2. Percorrer os tiles e calcular a distância métrica
+        for zoom_str in os.listdir(self.repo_path):
+            if not zoom_str.isdigit():
+                continue
+            zoom = int(zoom_str)
+            zoom_dir = os.path.join(self.repo_path, zoom_str)
+
+            for filename in os.listdir(zoom_dir):
+                if filename.endswith(".jpg"):
+                    parts = filename.split("_")
+                    if len(parts) == 3:
+                        t_x = int(parts[1])
+                        t_y = int(parts[2].split(".")[0])
+
+                        # Descobrir Lat/Lon do canto superior esquerdo deste tile
+                        bounds = mercantile.bounds(t_x, t_y, zoom)
+
+                        # Converter para metros usando a fórmula esférica
+                        d_lat = math.radians(bounds.north - self.map_origin_lat)
+                        d_lon = math.radians(bounds.west - self.map_origin_lon)
+
+                        norte_m = d_lat * self.EARTH_RADIUS
+                        este_m = (
+                            d_lon * self.EARTH_RADIUS * math.cos(math.radians(self.map_origin_lat))
+                        )
+
+                        # Guardar na cache
+                        self.tile_metric_cache[(zoom, t_x, t_y)] = (este_m, norte_m)
