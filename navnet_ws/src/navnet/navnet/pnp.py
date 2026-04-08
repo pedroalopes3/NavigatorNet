@@ -34,7 +34,7 @@ class PnPSolver:
             distCoeffs=self.D,
             reprojectionError=5.0,  # Se um ponto fugir mais de 5 píxeis e rejeitado, experimentar umanetar para dar mais hits
             confidence=0.99,
-            flags=cv2.SOLVEPNP_ITERATIVE,
+            flags=cv2.SOLVEPNP_IPPE,
         )
 
         if not sucesso or inliers is None:

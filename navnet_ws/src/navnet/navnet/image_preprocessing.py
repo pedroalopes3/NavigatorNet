@@ -25,6 +25,8 @@ class CameraCalibrator:
         self.f_final = (new_K[0, 0] + new_K[1, 1]) / 2
         new_K[0, 0] = new_K[1, 1] = self.f_final
 
+        self.new_K = new_K
+
         self.mapx, self.mapy = cv2.initUndistortRectifyMap(
             K_square, self.D, None, new_K, (w, h), cv2.CV_32FC1
         )
