@@ -1,0 +1,33 @@
+navnet_node:
+  ros__parameters:
+
+# camara
+
+    camera:
+      alpha_calibration: 0.2
+      pitch_offset_deg: 27.0
+      roll_offset_deg: -4.0
+      matrix_k: [896.602173,0.0,1003.954285,0.0,881.922974,451.323334,0.0,0.0,1.0]
+      dist_coeffs: [1.771178e00,3.254712e00,4.790912e-03,-3.419381e-03,2.092365e-01,2.054499e00,3.929369e00,1.042681e00]
+    
+
+# superpoint e superglue
+
+    models:
+      scale_cam: 1.0
+      scale_map: 1.0
+      superpoint:
+        nms_radius: 4
+        keypoint_threshold: 0.005
+        max_keypoints: 1024
+      superglue:
+        weights: "outdoor"
+        sinkhorn_iterations: 20
+        match_threshold: 0.2
+  
+# pnp e ransac
+    
+    pnp:
+      min_points_required: 4
+      reprojection_error: 5.0
+      confidence: 0.99

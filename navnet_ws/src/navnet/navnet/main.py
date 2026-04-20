@@ -7,7 +7,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from rclpy.node import Node
-from sensor_msgs.msg import CompressedImage, Image
+from sensor_msgs.msg import CompressedImage, Image, NavSatFix
 from std_msgs.msg import String
 from vbn_ros_msgs.msg import Attitude, GPSRawInt
 
@@ -23,6 +23,35 @@ class NavNetNode(Node):
         super().__init__("navnet_node")
         self.get_logger().info("NavNet node started")
 
+        # caso o yaml falhe usa estes parametros default
+        self.declare_parameter("models.scale_cam", 1.0)
+        self.declare_parameter("models.scale_map", 1.0)
+        self.declare_parameter("models.superglue.match_threshold", 0.2)
+        self.declare_parameter("pnp.min_points_required", 4)
+        self.declare_parameter("pnp.reprojection_error", 5.0)
+
+        self.declare_parameter(
+            "camera.matrix_k", [1000.0, 0.0, 960.0, 0.0, 1000.0, 540.0, 0.0, 0.0, 1.0]
+        )
+        self.declare_parameter("camera.dist_coeffs", [0.0, 0.0, 0.0, 0.0])
+        self.declare_parameter("camera.alpha_calibration", 0.2)
+
+        self.scale_cam = self.get_parameter("models.scale_cam").value
+        self.scale_map = self.get_parameter("models.scale_map").value
+        self.match_thresh = self.get_parameter("models.superglue.match_threshold").value
+
+        # pnp
+        self.min_pnp_points = self.get_parameter("pnp.min_points_required").value
+        self.pnp_reproj_error = self.get_parameter("pnp.reprojection_error").value
+
+        k_flat = self.get_parameter("camera.matrix_k").value
+        d_flat = self.get_parameter("camera.dist_coeffs").value
+        alpha_calib = self.get_parameter("camera.alpha_calibration").value
+        self.K_MATRIX = np.array(k_flat, dtype=np.float32).reshape((3, 3))
+        self.D_COEFFS = np.array(d_flat, dtype=np.float32)
+
+        self.get_logger().info(f"Params loaded from yaml file")
+
         self.bridge = CvBridge()
 
         # BUFFERS
@@ -36,26 +65,34 @@ class NavNetNode(Node):
         self.map_pub = self.create_publisher(Image, "/camera/map_tile", 10)
         self.matches_pub = self.create_publisher(Image, "/camera/matches", 10)
         self.norm_matches_pub = self.create_publisher(String, "/matches_normalized", 10)
+        self.gps_map_pub = self.create_publisher(NavSatFix, "/map/gps_raw", 10)
+        self.vision_map_pub = self.create_publisher(NavSatFix, "/map/navnet_estimation", 10)
 
         # SUBSCRIBERS
         self.create_subscription(GPSRawInt, "/gps_raw_int", self.gps_callback, 10)
         self.create_subscription(Attitude, "/attitude", self.att_callback, 10)
         self.create_subscription(CompressedImage, "/image/compressed", self.image_callback, 10)
 
-        # INICIALIZAÇÃO DOS COMPONENTES
-        K = [[896.602173, 0.0, 1003.954285], [0.0, 881.922974, 451.323334], [0.0, 0.0, 1.0]]
-        D = [
-            1.771178e00,
-            3.254712e00,
-            4.790912e-03,
-            -3.419381e-03,
-            2.092365e-01,
-            2.054499e00,
-            3.929369e00,
-            1.042681e00,
-        ]
-        self.calibrator = CameraCalibrator(K_matrix=K, D_coeffs=D, alpha=0.2)
-        self.pnp_solver = PnPSolver(K, D)
+        # garbage
+        # # INICIALIZAÇÃO DOS COMPONENTES
+        # K = [[896.602173, 0.0, 1003.954285], [0.0, 881.922974, 451.323334], [0.0, 0.0, 1.0]]
+        # D = [
+        #     1.771178e00,
+        #     3.254712e00,
+        #     4.790912e-03,
+        #     -3.419381e-03,
+        #     2.092365e-01,
+        #     2.054499e00,
+        #     3.929369e00,
+        #     1.042681e00,
+        # ]
+        # self.calibrator = CameraCalibrator(K_matrix=K, D_coeffs=D, alpha=0.2)
+        # self.pnp_solver = PnPSolver(K, D)
+
+        # init dos modulos
+        self.calibrator = CameraCalibrator(self.K_MATRIX, self.D_COEFFS, alpha=alpha_calib)
+        self.matcher = SPGlueMatcher()
+        self.pnp_solver = PnPSolver(self.K_MATRIX, self.D_COEFFS)
 
         self.map_manager = MapRepoManager("/workspace/tiles_output")
         self.map_manager.analyze()
@@ -159,7 +196,7 @@ class NavNetNode(Node):
                 self._publish_cv2_image(self.map_pub, map_img, sec, nanosec)
 
                 try:
-                    scale_cam, scale_map = 1.0, 1.0
+                    scale_cam, scale_map = self.scale_cam, self.scale_map
                     h_cam, w_cam = calibrated_image.shape[:2]
                     h_map, w_map = map_img.shape[:2]
 
@@ -203,6 +240,28 @@ class NavNetNode(Node):
                                     f"Erro de Posição: {erro_metros:.1f} metros\n"
                                     f"Altitude Visual: {drone_z_alt:.1f}m\n"
                                 )
+
+                                # gps raw map topic for foxglove ()
+                                gps_msg = NavSatFix()
+                                gps_msg.header.stamp.sec = sec
+                                gps_msg.header.stamp.nanosec = nanosec
+                                gps_msg.header.frame_id = "earth"
+                                gps_msg.latitude = float(lat_deg)
+                                gps_msg.longitude = float(lon_deg)
+                                gps_msg.altitude = float(
+                                    self.map_manager.current_telemetry["alt_m"]
+                                )
+                                self.gps_map_pub.publish(gps_msg)
+
+                                # navnet estimation map topic for foxglove ()
+                                vision_msg = NavSatFix()
+                                vision_msg.header.stamp.sec = sec
+                                vision_msg.header.stamp.nanosec = nanosec
+                                vision_msg.header.frame_id = "earth"
+                                vision_msg.latitude = float(calc_lat)
+                                vision_msg.longitude = float(calc_lon)
+                                vision_msg.altitude = float(drone_z_alt)
+                                self.vision_map_pub.publish(vision_msg)
 
                             else:
                                 self.get_logger().warn(
