@@ -24,33 +24,87 @@ class NavNetNode(Node):
         self.get_logger().info("NavNet node started")
 
         # caso o yaml falhe usa estes parametros default
-        self.declare_parameter("models.scale_cam", 1.0)
-        self.declare_parameter("models.scale_map", 1.0)
-        self.declare_parameter("models.superglue.match_threshold", 0.2)
-        self.declare_parameter("pnp.min_points_required", 4)
-        self.declare_parameter("pnp.reprojection_error", 5.0)
 
+        # camara
         self.declare_parameter(
             "camera.matrix_k", [1000.0, 0.0, 960.0, 0.0, 1000.0, 540.0, 0.0, 0.0, 1.0]
         )
         self.declare_parameter("camera.dist_coeffs", [0.0, 0.0, 0.0, 0.0])
         self.declare_parameter("camera.alpha_calibration", 0.2)
 
-        self.scale_cam = self.get_parameter("models.scale_cam").value
-        self.scale_map = self.get_parameter("models.scale_map").value
-        self.match_thresh = self.get_parameter("models.superglue.match_threshold").value
-
         # pnp
-        self.min_pnp_points = self.get_parameter("pnp.min_points_required").value
-        self.pnp_reproj_error = self.get_parameter("pnp.reprojection_error").value
+        self.declare_parameter("pnp.reprojection_error", 5.0)
+        self.declare_parameter("pnp.confidence", 0.99)
+        self.declare_parameter("pnp.interationscount", 2000.0)
+        self.declare_parameter("pnp.min_points", 6.0)
 
+        # modelos
+        self.declare_parameter("models.scale_cam", 1.0)
+        self.declare_parameter("models.scale_map", 1.0)
+        self.declare_parameter("models.superpoint.nms_radius", 4)
+        self.declare_parameter("models.superpoint.keypoint_threshold", 0.005)
+        self.declare_parameter("models.superpoint.max_keypoints", 1024)
+        self.declare_parameter("models.superglue.weights", "outdoor")
+        self.declare_parameter("models.superglue.sinkhorn_iterations", 20)
+        self.declare_parameter("models.superglue.match_threshold", 0.2)
+
+        # carregar
         k_flat = self.get_parameter("camera.matrix_k").value
         d_flat = self.get_parameter("camera.dist_coeffs").value
         alpha_calib = self.get_parameter("camera.alpha_calibration").value
+
+        self.scale_cam = self.get_parameter("models.scale_cam").value
+        self.scale_map = self.get_parameter("models.scale_map").value
+        self.pnp_reproj_error = self.get_parameter("pnp.reprojection_error").value
+        self.confidence = self.get_parameter("pnp.confidence").value
+        self.interationscount = self.get_parameter("pnp.interationscount").value
+        self.min_points = self.get_parameter("pnp.min_points").value
+
         self.K_MATRIX = np.array(k_flat, dtype=np.float32).reshape((3, 3))
         self.D_COEFFS = np.array(d_flat, dtype=np.float32)
 
-        self.get_logger().info(f"Params loaded from yaml file")
+        ai_config = {
+            "superpoint": {
+                "nms_radius": self.get_parameter("models.superpoint.nms_radius").value,
+                "keypoint_threshold": self.get_parameter(
+                    "models.superpoint.keypoint_threshold"
+                ).value,
+                "max_keypoints": self.get_parameter("models.superpoint.max_keypoints").value,
+            },
+            "superglue": {
+                "weights": self.get_parameter("models.superglue.weights").value,
+                "sinkhorn_iterations": self.get_parameter(
+                    "models.superglue.sinkhorn_iterations"
+                ).value,
+                "match_threshold": self.get_parameter("models.superglue.match_threshold").value,
+            },
+        }
+
+        # Replace your old log line with this:
+        self.get_logger().info(
+            f"\n{'=' * 50}\n"
+            f"Parameters in use in the pipeline\n"
+            f"{'=' * 50}\n"
+            f"Camera: \n"
+            f"  Alpha Calibration: {alpha_calib}\n"
+            f"  K Matrix:\n{self.K_MATRIX}\n"
+            f"  D Coefficients: {self.D_COEFFS}\n\n"
+            f"Models\n"
+            f"  Camera Scale: {self.scale_cam}x\n"
+            f"  Map Scale:    {self.scale_map}x\n"
+            f"  NMS Radius:         {ai_config['superpoint']['nms_radius']}\n"
+            f"  Keypoint Threshold: {ai_config['superpoint']['keypoint_threshold']}\n"
+            f"  Max Keypoints:      {ai_config['superpoint']['max_keypoints']}\n"
+            f"  Weights:             {ai_config['superglue']['weights']}\n"
+            f"  Sinkhorn Iterations: {ai_config['superglue']['sinkhorn_iterations']}\n"
+            f"  Match Threshold:     {ai_config['superglue']['match_threshold']}\n\n"
+            f"PNP/Ransac\n"
+            f"  Reprojection Error:  {self.pnp_reproj_error} px\n"
+            f"  Confidence:          {self.confidence * 100}%\n"
+            f"  Interations count:   {self.interationscount}\n"
+            f"  Min points:          {self.min_points}\n"
+            f"{'=' * 50}"
+        )
 
         self.bridge = CvBridge()
 
@@ -60,10 +114,10 @@ class NavNetNode(Node):
         self.CAMERA_DELAY_NS = 0
 
         # PUBLISHERS
-        self.image_pub = self.create_publisher(Image, "/camera/image_calibrated", 10)
-        self.raw_image_pub = self.create_publisher(Image, "/camera/image_raw", 10)
-        self.map_pub = self.create_publisher(Image, "/camera/map_tile", 10)
-        self.matches_pub = self.create_publisher(Image, "/camera/matches", 10)
+        self.image_pub = self.create_publisher(CompressedImage, "/camera/image_calibrated", 10)
+        self.raw_image_pub = self.create_publisher(CompressedImage, "/camera/image_raw", 10)
+        self.map_pub = self.create_publisher(CompressedImage, "/camera/map_tile", 10)
+        self.matches_pub = self.create_publisher(CompressedImage, "/camera/matches", 10)
         self.norm_matches_pub = self.create_publisher(String, "/matches_normalized", 10)
         self.gps_map_pub = self.create_publisher(NavSatFix, "/map/gps_raw", 10)
         self.vision_map_pub = self.create_publisher(NavSatFix, "/map/navnet_estimation", 10)
@@ -89,13 +143,23 @@ class NavNetNode(Node):
         # self.calibrator = CameraCalibrator(K_matrix=K, D_coeffs=D, alpha=0.2)
         # self.pnp_solver = PnPSolver(K, D)
 
+        #############################
         # init dos modulos
         self.calibrator = CameraCalibrator(self.K_MATRIX, self.D_COEFFS, alpha=alpha_calib)
-        self.matcher = SPGlueMatcher()
-        self.pnp_solver = PnPSolver(self.K_MATRIX, self.D_COEFFS)
+        self.matcher = SPGlueMatcher(custom_config=ai_config)
+        self.pnp_solver = PnPSolver(
+            self.K_MATRIX,
+            self.D_COEFFS,
+            self.pnp_reproj_error,
+            self.confidence,
+            self.min_points,
+            self.interationscount,
+        )
 
         self.map_manager = MapRepoManager("/workspace/tiles_output")
         self.map_manager.analyze()
+
+        ###################################
 
         try:
             self.matcher = SPGlueMatcher()
@@ -104,7 +168,7 @@ class NavNetNode(Node):
             self.get_logger().error(f"Falha ao carregar a IA: {e}")
 
     # =========================================================================
-    # CALLBACKS DOS SENSORES (Tem de ficar aqui porque usam o self.buffer)
+    # CALLBACK SENSORES
     # =========================================================================
     def gps_callback(self, msg: GPSRawInt):
         t = self.get_clock().now().nanoseconds
@@ -119,7 +183,7 @@ class NavNetNode(Node):
             self.att_buffer.pop(0)
 
     # =========================================================================
-    # FUNÇÕES AUXILIARES DO ROS (Tem de ficar aqui porque acedem ao self)
+    # FUNÇÕES AUXILIARES (depois meter no utils)
     # =========================================================================
     def _sync_telemetry(self, target_time):
         best_gps = min(self.gps_buffer, key=lambda x: abs(x[0] - target_time))[1]
@@ -143,15 +207,16 @@ class NavNetNode(Node):
         delta_lat_rad = drone_y_norte / raio_terra
         delta_lon_rad = drone_x_este / (raio_terra * math.cos(math.radians(lat_origem)))
 
-        calc_lat = lat_origem + math.degrees(delta_lat_rad)
+        calc_lat = lat_origem - math.degrees(delta_lat_rad)
         calc_lon = lon_origem + math.degrees(delta_lon_rad)
 
         return calc_lat, calc_lon
 
+    ## publisher for image topics
     def _publish_cv2_image(self, publisher, cv_image, sec, nanosec, frame_id="camera_link"):
         if cv_image is None:
             return
-        img_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding="bgr8")
+        img_msg = self.bridge.cv2_to_compressed_imgmsg(cv_image, dst_format="jpg")
         img_msg.header.stamp.sec = sec
         img_msg.header.stamp.nanosec = nanosec
         img_msg.header.frame_id = frame_id
@@ -166,7 +231,7 @@ class NavNetNode(Node):
         if not self.gps_buffer or not self.att_buffer:
             return
 
-        # 1. Sincronizar e Atualizar Telemetria
+        # Sincronizar e Atualizar telemtria
         target_time = msg_time - self.CAMERA_DELAY_NS
         lat_deg, lon_deg, alt_m, heading_deg, pitch_rad, roll_rad = self._sync_telemetry(
             target_time
@@ -175,7 +240,7 @@ class NavNetNode(Node):
         self.map_manager.update_gps(lat_deg, lon_deg, alt_m, heading_deg)
         self.map_manager.update_attitude(pitch_rad, roll_rad)
 
-        # 2. Processar a Imagem
+        # Processar a Imagem
         raw_image, calibrated_image = self.calibrator.process_frame(msg.data)
         if calibrated_image is None:
             return
@@ -183,7 +248,7 @@ class NavNetNode(Node):
         sec = int(msg_time // 1e9)
         nanosec = int(msg_time % 1e9)
 
-        # 3. Lógica Principal de Navegação Visual
+        # Lógica Principal de Navegação Visual
         if self.calibrator.f_final is not None and self.map_manager.current_telemetry["lat"] != 0.0:
             self.pnp_solver.K = self.calibrator.new_K
             self.pnp_solver.D = np.zeros((4, 1), dtype=np.float32)
@@ -216,7 +281,7 @@ class NavNetNode(Node):
 
                         matches_img = draw_matches(calibrated_image, map_img, kp1, kp2)
 
-                        if num_pontos >= 4:
+                        if num_pontos >= self.min_points:
                             sucesso, posicao_drone, inliers = self.pnp_solver.solve(
                                 kp1, m_este, m_norte
                             )
@@ -269,7 +334,7 @@ class NavNetNode(Node):
                                 )
                         else:
                             self.get_logger().warn(
-                                f"Aviso: Apenas {num_pontos} matches. O PnP exige >= 4."
+                                f"Aviso: Apenas {num_pontos} matches. O PnP exige >= {self.min_points:.1f}"
                             )
 
                         self._publish_cv2_image(self.matches_pub, matches_img, sec, nanosec)

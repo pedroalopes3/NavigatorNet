@@ -17,17 +17,18 @@ navnet_node:
       scale_cam: 1.0
       scale_map: 1.0
       superpoint:
-        nms_radius: 4
-        keypoint_threshold: 0.005
-        max_keypoints: 1024
+        nms_radius: 4     # limite de proximidade entre features (ex:4 pixels)
+        keypoint_threshold: 0.05  # o nivel de confiança requerido para um ponto ser considerado feature
+        max_keypoints: 1024    # limite de features
       superglue:
         weights: "outdoor"
-        sinkhorn_iterations: 20
-        match_threshold: 0.2
+        sinkhorn_iterations: 70  # numero de interacoes
+        match_threshold: 0.9   # percentagem de comfiança no match 0.2 = 20%
   
 # pnp e ransac
     
     pnp:
-      min_points_required: 4
-      reprojection_error: 5.0
-      confidence: 0.99
+      min_points: 6.0 # numero minimo para deixar o ransac sequer correr (e impossivel ser menos de 4)
+      reprojection_error: 5.0   # raio limite em pixeis da reprjecao do ransac
+      confidence: 0.99 # correr ransac ate convergir com esta confianca
+      interationscount: 2000.0 # ransac max interations

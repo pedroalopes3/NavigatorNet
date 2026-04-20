@@ -5,22 +5,18 @@ import numpy as np
 import torch
 
 from .models.superglue import SuperGlue
-
-# NOTA: Assumimos que as implementações oficiais da MagicLeap
-# (superpoint.py e superglue.py) estão dentro da pasta 'models'
 from .models.superpoint import SuperPoint
 
 
 class SPGlueMatcher:
-    def __init__(self):
+    def __init__(self, custom_config=None):
         """
         Inicializa o SuperPoint e SuperGlue.
         """
-        # Escolhe o GPU se existir, senão usa o CPU (útil para testar no PC e depois passar para o Jetson)
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"[SPGlueMatcher] A inicializar modelos no dispositivo: {self.device}")
 
-        # Configurações padrão (podes ajustar para performance no Jetson Nano)
+        # Configurações padrão
         self.config = {
             "superpoint": {
                 "nms_radius": 4,
@@ -34,7 +30,13 @@ class SPGlueMatcher:
             },
         }
 
-        # 1. Instanciar os modelos (Eles vão carregar os pesos automaticamente da sua própria pasta)
+        if custom_config is not None:
+            if "superpoint" in custom_config:
+                self.config["superpoint"].update(custom_config["superpoint"])
+            if "superglue" in custom_config:
+                self.config["superglue"].update(custom_config["superglue"])
+
+        # iniciar os modelos com os parametros (atualizados do yaml senao usa os default acima)
         self.superpoint = SuperPoint(self.config["superpoint"]).to(self.device)
         self.superglue = SuperGlue(self.config["superglue"]).to(self.device)
 

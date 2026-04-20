@@ -1,0 +1,26 @@
+╔══════════════════════════════════════════════════╗
+║          NavNet — KPI Summary Report             ║
+╚══════════════════════════════════════════════════╝
+
+  Run duration          : 5162.3 s
+  GPS samples           : 861
+  NavNet estimations    : 861
+  Estimation rate       : 0.17 Hz
+
+── Position Error (inliers only) ─────────────────
+  Mean error            : 83.32 m
+  Median error          : 71.38 m
+  Std deviation         : 54.02 m
+  RMSE                  : 99.28 m
+  Min error             : 3.58 m
+  Max error             : 295.12 m
+  P90 error             : 152.13 m
+  P95 error             : 179.04 m
+
+── Altitude ──────────────────────────────────────
+  Mean altitude error   : 24.28 m
+
+── False Positives ───────────────────────────────
+  Threshold             : 300 m
+  Count                 : 27
+  Percentage            : 3.1 %

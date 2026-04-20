@@ -21,8 +21,8 @@ class MapRepoManager:
         self.analyzed = False
 
         self.EARTH_RADIUS = 6378137.0
-        self.camera_pitch_offset_deg = 27.0
-        self.camera_roll_offset_deg = -4.0
+        self.camera_pitch_offset_deg = 27.0  # meter a entrar pelo yaml
+        self.camera_roll_offset_deg = -4.0  # same
 
         self.current_telemetry = {
             "lat": 0.0,
@@ -33,9 +33,6 @@ class MapRepoManager:
             "roll_rad": 0.0,
         }
 
-    # ==========================================
-    # NOVAS FUNÇÕES (Sem dependência de mensagens ROS)
-    # ==========================================
     def update_gps(self, lat_deg, lon_deg, alt_m, heading_deg):
         self.current_telemetry["lat"] = lat_deg
         self.current_telemetry["lon"] = lon_deg
@@ -309,7 +306,7 @@ class MapRepoManager:
 
         # Adicionar o offset do pixel (O eixo Y cresce para baixo, logo subtraímos)
         matches_este_m = m_tile_este + (px_x * mpp)
-        matches_norte_m = m_tile_norte - (px_y * mpp)
+        matches_norte_m = m_tile_norte + (px_y * mpp)
 
         return matches_este_m, matches_norte_m
 
@@ -322,13 +319,11 @@ class MapRepoManager:
             print("[MapManager] Bounding box inválida. A ignorar o pré-cálculo métrico.")
             return
 
-        # 1. Definir o Ponto Zero do mapa (0,0)
+        # Definir o ponto zero do mapa (0,0)
         self.map_origin_lat = self.global_bbox["north"]
         self.map_origin_lon = self.global_bbox["west"]
 
-        print("\n[MapManager] A pré-calcular coordenadas métricas 'A Priori'...")
-
-        # 2. Percorrer os tiles e calcular a distância métrica
+        # Percorrer os tiles e calcular a distância métrica
         for zoom_str in os.listdir(self.repo_path):
             if not zoom_str.isdigit():
                 continue
@@ -346,7 +341,7 @@ class MapRepoManager:
                         bounds = mercantile.bounds(t_x, t_y, zoom)
 
                         # Converter para metros usando a fórmula esférica
-                        d_lat = math.radians(bounds.north - self.map_origin_lat)
+                        d_lat = math.radians(self.map_origin_lat - bounds.north)
                         d_lon = math.radians(bounds.west - self.map_origin_lon)
 
                         norte_m = d_lat * self.EARTH_RADIUS
