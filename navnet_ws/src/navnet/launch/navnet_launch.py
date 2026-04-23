@@ -11,17 +11,15 @@ from launch import LaunchDescription
 def generate_launch_description():
 
     config_file = os.path.join(
-        get_package_share_directory('navnet'),
-        'params',
-        'navnet_params.yaml'
+        get_package_share_directory("navnet"), "params", "navnet_params.yaml"
     )
 
     navnet_node = Node(
-        package="navnet", 
-        executable="navnet_node", 
-        name="navnet_node", 
+        package="navnet",
+        executable="navnet_node",
+        name="navnet_node",
         output="screen",
-        parameters=[config_file] 
+        parameters=[config_file],
     )
 
     # Launch do Rosbridge na porta 9090
@@ -32,4 +30,5 @@ def generate_launch_description():
         )
     )
 
-    return LaunchDescription([rosbridge_server, navnet_node])
+    # return LaunchDescription([rosbridge_server, navnet_node])
+    return LaunchDescription([navnet_node])
