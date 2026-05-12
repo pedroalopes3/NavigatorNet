@@ -13,7 +13,7 @@ from vbn_ros_msgs.msg import Attitude, GPSRawInt
 
 from navnet.image_preprocessing import CameraCalibrator
 from navnet.map_manager import MapRepoManager
-from navnet.matcher import SPGlueMatcher
+from navnet.matcher import SPLightGlueMatcher
 from navnet.pnp import PnPSolver
 from navnet.utils import calculate_distance_meters, draw_matches
 
@@ -44,9 +44,9 @@ class NavNetNode(Node):
         self.declare_parameter("models.superpoint.nms_radius", 4)
         self.declare_parameter("models.superpoint.keypoint_threshold", 0.005)
         self.declare_parameter("models.superpoint.max_keypoints", 1024)
-        self.declare_parameter("models.superglue.weights", "outdoor")
-        self.declare_parameter("models.superglue.sinkhorn_iterations", 20)
-        self.declare_parameter("models.superglue.match_threshold", 0.2)
+        self.declare_parameter("models.lightglue.depth_confidence", 0.95)
+        self.declare_parameter("models.lightglue.width_confidence", 0.99)
+        self.declare_parameter("models.lightglue.filter_threshold", 0.1)
 
         # carregar
         k_flat = self.get_parameter("camera.matrix_k").value
@@ -71,12 +71,10 @@ class NavNetNode(Node):
                 ).value,
                 "max_keypoints": self.get_parameter("models.superpoint.max_keypoints").value,
             },
-            "superglue": {
-                "weights": self.get_parameter("models.superglue.weights").value,
-                "sinkhorn_iterations": self.get_parameter(
-                    "models.superglue.sinkhorn_iterations"
-                ).value,
-                "match_threshold": self.get_parameter("models.superglue.match_threshold").value,
+            "lightglue": {
+                "depth_confidence": self.get_parameter("models.lightglue.depth_confidence").value,
+                "width_confidence": self.get_parameter("models.lightglue.width_confidence").value,
+                "filter_threshold": self.get_parameter("models.lightglue.filter_threshold").value,
             },
         }
 
@@ -94,10 +92,10 @@ class NavNetNode(Node):
             f"  Map Scale:    {self.scale_map}x\n"
             f"  NMS Radius:         {ai_config['superpoint']['nms_radius']}\n"
             f"  Keypoint Threshold: {ai_config['superpoint']['keypoint_threshold']}\n"
-            f"  Max Keypoints:      {ai_config['superpoint']['max_keypoints']}\n"
-            f"  Weights:             {ai_config['superglue']['weights']}\n"
-            f"  Sinkhorn Iterations: {ai_config['superglue']['sinkhorn_iterations']}\n"
-            f"  Match Threshold:     {ai_config['superglue']['match_threshold']}\n\n"
+            f"  Max Keypoints:       {ai_config['superpoint']['max_keypoints']}\n"
+            f"  Depth Conf:          {ai_config['lightglue']['depth_confidence']}\n"
+            f"  Width Conf:          {ai_config['lightglue']['width_confidence']}\n"
+            f"  Filter Threshold:    {ai_config['lightglue']['filter_threshold']}\n\n"
             f"PNP/Ransac\n"
             f"  Reprojection Error:  {self.pnp_reproj_error} px\n"
             f"  Confidence:          {self.confidence * 100}%\n"
@@ -146,7 +144,7 @@ class NavNetNode(Node):
         #############################
         # init dos modulos
         self.calibrator = CameraCalibrator(self.K_MATRIX, self.D_COEFFS, alpha=alpha_calib)
-        self.matcher = SPGlueMatcher(custom_config=ai_config)
+        self.matcher = SPLightGlueMatcher(custom_config=ai_config)
         self.pnp_solver = PnPSolver(
             self.K_MATRIX,
             self.D_COEFFS,
@@ -162,8 +160,8 @@ class NavNetNode(Node):
         ###################################
 
         try:
-            self.matcher = SPGlueMatcher()
-            self.get_logger().info("Redes SuperPoint e SuperGlue iniciadas com sucesso!")
+            self.matcher = SPLightGlueMatcher()
+            self.get_logger().info("Redes SuperPoint e LightGlue iniciadas com sucesso!")
         except Exception as e:
             self.get_logger().error(f"Falha ao carregar a IA: {e}")
 

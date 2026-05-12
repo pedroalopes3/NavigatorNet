@@ -13,6 +13,8 @@ navnet_node:
 
 # superpoint e superglue
 
+# superpoint e lightglue
+
     models:
       scale_cam: 1.0
       scale_map: 1.0
@@ -20,10 +22,10 @@ navnet_node:
         nms_radius: 4     # limite de proximidade entre features (ex:4 pixels)
         keypoint_threshold: 0.05  # o nivel de confiança requerido para um ponto ser considerado feature
         max_keypoints: 1024    # limite de features
-      superglue:
-        weights: "outdoor"
-        sinkhorn_iterations: 70  # numero de interacoes
-        match_threshold: 0.9   # percentagem de comfiança no match 0.2 = 20%
+      lightglue:
+        depth_confidence: 0.95 
+        width_confidence: 0.99  
+        filter_threshold: 0.1   # equivalência funcional ao match_threshold
   
 # pnp e ransac
     
