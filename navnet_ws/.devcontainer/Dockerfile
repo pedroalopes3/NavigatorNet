@@ -31,7 +31,8 @@ RUN uv pip install --system --no-cache \
     pytest \
     torch \
     torchvision \
-    scipy
+    scipy \
+    "git+https://github.com/cvg/LightGlue.git"
 
 WORKDIR /workspace
 
