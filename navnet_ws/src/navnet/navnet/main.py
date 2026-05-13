@@ -78,7 +78,7 @@ class NavNetNode(Node):
             },
         }
 
-        # Replace your old log line with this:
+        # log parametros
         self.get_logger().info(
             f"\n{'=' * 50}\n"
             f"Parameters in use in the pipeline\n"
@@ -246,14 +246,19 @@ class NavNetNode(Node):
         sec = int(msg_time // 1e9)
         nanosec = int(msg_time % 1e9)
 
-        # Lógica Principal de Navegação Visual
+        # Se a calibração foi bem sucedida e temos uma posição GPS válida tentamos resolver o PnP
         if self.calibrator.f_final is not None and self.map_manager.current_telemetry["lat"] != 0.0:
             self.pnp_solver.K = self.calibrator.new_K
             self.pnp_solver.D = np.zeros((4, 1), dtype=np.float32)
 
-            map_img, map_info = self.map_manager.get_map_for_telemetry(
-                f_final=self.calibrator.f_final
+            map_img, map_info, stitched_features = self.map_manager.get_map_for_telemetry(
+                f_final=self.calibrator.f_final, offline_scale=0.5
             )
+            # scale tem de ser igual ao do script de extraçao offiline para nao dar merda
+
+            # map_img, map_info = self.map_manager.get_map_for_telemetry(
+            #    f_final=self.calibrator.f_final
+            # )
 
             if map_img is not None:
                 self._publish_cv2_image(self.map_pub, map_img, sec, nanosec)
@@ -263,17 +268,55 @@ class NavNetNode(Node):
                     h_cam, w_cam = calibrated_image.shape[:2]
                     h_map, w_map = map_img.shape[:2]
 
-                    cam_leve = cv2.resize(
-                        calibrated_image, (int(w_cam / scale_cam), int(h_cam / scale_cam))
-                    )
-                    map_leve = cv2.resize(map_img, (int(w_map / scale_map), int(h_map / scale_map)))
+                    #
+                    # matching offline
+                    #
 
-                    kp1_small, kp2_small = self.matcher.match(cam_leve, map_leve)
-                    num_pontos = kp1_small.shape[1]
+                    # Not sure se e w_cam * self.scale_cam ou w_cam / self.scale_cam, de der merda tentar o outro
+                    cam_leve = cv2.resize(
+                        calibrated_image, (int(w_cam * self.scale_cam), int(h_cam * self.scale_cam))
+                    )
+
+                    if stitched_features is not None:
+                        map_h = int(map_img.shape[0] * self.scale_map)
+                        map_w = int(map_img.shape[1] * self.scale_map)
+
+                        kp1_small, kp2_small = self.matcher.match_offline(
+                            cam_leve, stitched_features, map_shape=(map_h, map_w)
+                        )
+
+                        num_pontos = kp1_small.shape[1] if len(kp1_small) > 0 else 0
+
+                        cam_leve = cv2.resize(
+                            calibrated_image, (int(w_cam / scale_cam), int(h_cam / scale_cam))
+                        )
+                        map_leve = cv2.resize(
+                            map_img, (int(w_map / scale_map), int(h_map / scale_map))
+                        )
+
+                        kp1_small, kp2_small = self.matcher.match(cam_leve, map_leve)
+                        num_pontos = kp1_small.shape[1]
+
+                    #
+                    # matching online
+                    #
+
+                    # cam_leve = cv2.resize(
+                    #     calibrated_image, (int(w_cam / scale_cam), int(h_cam / scale_cam))
+                    # )
+                    # map_leve = cv2.resize(map_img, (int(w_map / scale_map), int(h_map / scale_map)))
+
+                    # kp1_small, kp2_small = self.matcher.match(cam_leve, map_leve)
+                    # num_pontos = kp1_small.shape[1]
 
                     if num_pontos > 0:
-                        kp1 = kp1_small * scale_cam
-                        kp2 = kp2_small * scale_map
+                        # matching online
+                        # kp1 = kp1_small * scale_cam
+                        # kp2 = kp2_small * scale_map
+
+                        # matching offline
+                        kp1 = kp1_small / self.scale_cam
+                        kp2 = kp2_small / self.scale_map
 
                         m_este, m_norte = self.map_manager.get_matches_in_meters(kp2, map_info)
 
@@ -340,7 +383,7 @@ class NavNetNode(Node):
                 except Exception as e:
                     self.get_logger().error(f"Erro a processar a frame na IA: {e}")
 
-        # 4. Publicar fluxos de imagem base
+        # publishers das imagens
         self._publish_cv2_image(self.image_pub, calibrated_image, sec, nanosec)
         self._publish_cv2_image(self.raw_image_pub, raw_image, sec, nanosec)
 

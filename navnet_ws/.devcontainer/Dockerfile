@@ -40,4 +40,4 @@ WORKDIR /workspace
 RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
     echo "if [ -f /workspace/install/setup.bash ]; then source /workspace/install/setup.bash; fi" >> ~/.bashrc
 
-CMD ["/bin/bash"]
+CMD ["/bin/bash"]P+º
