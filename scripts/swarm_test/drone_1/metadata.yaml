@@ -1,0 +1,46 @@
+rosbag2_bagfile_information:
+  compression_format: ''
+  compression_mode: ''
+  custom_data: null
+  duration:
+    nanoseconds: 3022997378560
+  files:
+  - duration:
+      nanoseconds: 3022997378560
+    message_count: 2601
+    path: drone_1.db3
+    starting_time:
+      nanoseconds_since_epoch: 1776727480587891712
+  message_count: 2601
+  relative_file_paths:
+  - drone_1.db3
+  ros_distro: rosbags
+  starting_time:
+    nanoseconds_since_epoch: 1776727480587891712
+  storage_identifier: sqlite3
+  topics_with_message_count:
+  - message_count: 867
+    topic_metadata:
+      name: /gps/fix
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: sensor_msgs/msg/NavSatFix
+      type_description_hash: 
+        RIHS01_62223ab3fe210a15976021da7afddc9e200dc9ec75231c1b6a557fc598a65404
+  - message_count: 867
+    topic_metadata:
+      name: /uwb/range_to_main
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: sensor_msgs/msg/Range
+      type_description_hash: 
+        RIHS01_9430b1915b94d4268ff903679e8ecd09b6a67d331bd028738ec1eeb592891ebd
+  - message_count: 867
+    topic_metadata:
+      name: /uwb/range_to_swarm
+      offered_qos_profiles: ''
+      serialization_format: cdr
+      type: std_msgs/msg/Float32MultiArray
+      type_description_hash: 
+        RIHS01_0599f6f85b4bfca379873a0b4375a0aca022156bd2d7021275d116ed1fa8bfe0
+  version: 2

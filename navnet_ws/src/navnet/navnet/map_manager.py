@@ -202,7 +202,8 @@ class MapRepoManager:
 
         return inc_lat, inc_lon, slant_distance
 
-    def get_stitched_map(self, target_tile, zoom, inc_lat, inc_lon):
+    def get_stitched_map_and_features(self, target_tile, zoom, inc_lat, inc_lon, offline_scale=0.5):
+        # (Mantém a lógica inicial para descobrir o centro e o mosaico...)
         info = self.zoom_info.get(zoom, {})
         high_res = info.get("high_res", False)
         tile_size = 512 if high_res else 256
@@ -216,6 +217,9 @@ class MapRepoManager:
 
         mosaic = np.zeros((2 * tile_size, 2 * tile_size, 3), dtype=np.uint8)
 
+        # Arrays para juntar os ficheiros .npz
+        all_kp, all_scores, all_desc = [], [], []
+
         for dy in [0, dir_y]:
             for dx in [0, dir_x]:
                 nx = (target_tile.x + dx) % (2**zoom)
@@ -228,17 +232,41 @@ class MapRepoManager:
                 x_start = col_pos * tile_size
 
                 if 0 <= ny < (2**zoom):
-                    filepath = os.path.join(self.repo_path, str(zoom), f"{zoom}_{nx}_{ny}.jpg")
-                    if os.path.exists(filepath):
-                        img = cv2.imread(filepath)
+                    # Localizar imagem e .npz
+                    base_path = os.path.join(self.repo_path, str(zoom), f"{zoom}_{nx}_{ny}")
+                    img_path = base_path + ".jpg"
+                    npz_path = base_path + ".npz"
+
+                    if os.path.exists(img_path):
+                        img = cv2.imread(img_path)
                         if img is not None:
                             mosaic[y_start : y_start + tile_size, x_start : x_start + tile_size] = (
                                 img
                             )
 
-        return mosaic, tile_size
+                    if os.path.exists(npz_path):
+                        data = np.load(npz_path)
+                        kp = data["keypoints"].copy()
 
-    def get_map_for_telemetry(self, f_final):
+                        # Adicionar o offset de onde o tile ficou no mosaico
+                        kp[:, 0] += x_start * offline_scale
+                        kp[:, 1] += y_start * offline_scale
+
+                        all_kp.append(kp)
+                        all_scores.append(data["scores"])
+                        all_desc.append(data["descriptors"])
+
+        stitched_features = None
+        if len(all_kp) > 0:
+            stitched_features = {
+                "keypoints": np.concatenate(all_kp, axis=0),
+                "scores": np.concatenate(all_scores, axis=0),
+                "descriptors": np.concatenate(all_desc, axis=1),  # Descriptors são [256, N]
+            }
+
+        return mosaic, tile_size, stitched_features
+
+    def get_map_for_telemetry(self, f_final, offline_scale=0.5):
         alt_m = max(self.current_telemetry["alt_m"], 1.0)
 
         lat = self.current_telemetry["lat"]
@@ -262,7 +290,13 @@ class MapRepoManager:
 
         target_tile = mercantile.tile(inc_lon, inc_lat, best_zoom)
 
-        map_img, tile_size = self.get_stitched_map(target_tile, best_zoom, inc_lat, inc_lon)
+        # Online feature matching
+        # map_img, tile_size = self.get_stitched_map(target_tile, best_zoom, inc_lat, inc_lon)
+
+        # Offline feature matching
+        map_img, tile_size, stitched_features = self.get_stitched_map_and_features(
+            target_tile, best_zoom, inc_lat, inc_lon, offline_scale=offline_scale
+        )
 
         info = {
             "inc_lat": inc_lat,
@@ -276,7 +310,11 @@ class MapRepoManager:
             "base_tile_size": tile_size,
         }
 
-        return map_img, info
+        # online feature matching
+        # return map_img, info
+
+        # offline feature matching
+        return map_img, info, stitched_features
 
     def get_matches_in_meters(self, kp2_array, map_info):
         zoom = map_info["zoom"]

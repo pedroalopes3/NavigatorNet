@@ -102,3 +102,38 @@ class SPGlueMatcher:
         kp2_out = mkpts2.T
 
         return kp1_out, kp2_out
+
+    @torch.no_grad()
+    def match_offline(self, img_cam: np.ndarray, map_features: dict, map_shape: tuple):
+        torch.cuda.empty_cache()
+
+        # 1. SuperPoint apenas na câmara
+        tensor_cam = self._preprocess_image(img_cam)
+        pred_cam = self.superpoint({"image": tensor_cam})
+
+        # 2. Construir dados cruzando GPU em tempo real com Disco pré-calculado
+        data = {
+            "image0": tensor_cam,
+            # Placeholder vazio para o mapa. O SuperGlue só precisa das dimensões, não dos píxeis!
+            "image1": torch.empty((1, 1, map_shape[0], map_shape[1]), device=self.device),
+            "keypoints0": pred_cam["keypoints"][0].unsqueeze(0),
+            "scores0": pred_cam["scores"][0].unsqueeze(0),
+            "descriptors0": pred_cam["descriptors"][0].unsqueeze(0),
+            
+            # Dados que vieram do .npz (Mover para o GPU)
+            "keypoints1": torch.from_numpy(map_features["keypoints"]).float().unsqueeze(0).to(self.device),
+            "scores1": torch.from_numpy(map_features["scores"]).float().unsqueeze(0).to(self.device),
+            "descriptors1": torch.from_numpy(map_features["descriptors"]).float().unsqueeze(0).to(self.device),
+        }
+
+        # 3. SuperGlue executa o match final
+        pred = self.superglue(data)
+
+        # 4. Extrair e validar
+        matches = pred["matches0"][0].cpu().numpy()
+        valid = matches > -1
+
+        mkpts_cam = pred_cam["keypoints"][0].cpu().numpy()[valid]
+        mkpts_map = map_features["keypoints"][matches[valid]]
+
+        return mkpts_cam.T, mkpts_map.T
