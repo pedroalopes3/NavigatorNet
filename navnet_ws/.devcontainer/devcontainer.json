@@ -4,15 +4,15 @@
         "dockerfile": "Dockerfile"
     },
     // para pc
-    // "runArgs": [
-    //     "--gpus",
-    //     "all"
-    // ],
-    // para o jetson
     "runArgs": [
-        "--runtime=nvidia",
-        "--network=host"
+        "--gpus",
+        "all"
     ],
+    // para o jetson
+    // "runArgs": [
+    //     "--runtime=nvidia",
+    //     "--network=host"
+    // ],
     "workspaceFolder": "/workspace",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
     "forwardPorts": [
@@ -44,3 +44,4 @@
     },
     "postCreateCommand": "apt-get update && rosdep update && rosdep install --from-paths src --ignore-src -y && uv pip install --system 'setuptools==58.2.0' && colcon build --symlink-install",
     "postStartCommand": "bash -c 'source /opt/ros/humble/setup.bash && nohup ros2 launch rosbridge_server rosbridge_websocket_launch.xml > /workspace/rosbridge.log 2>&1 &'"
+}

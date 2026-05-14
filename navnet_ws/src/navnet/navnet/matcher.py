@@ -97,44 +97,61 @@ class SPLightGlueMatcher:
         mkpts1 = pred1["keypoints"][0].cpu().numpy()[matches[:, 0]]
         mkpts2 = pred2["keypoints"][0].cpu().numpy()[matches[:, 1]]
 
-<<<<<<< HEAD
         # Transpor para formato [2, N]
         return mkpts1.T, mkpts2.T
-=======
-        return kp1_out, kp2_out
+        # return kp1_out, kp2_out
 
     @torch.no_grad()
     def match_offline(self, img_cam: np.ndarray, map_features: dict, map_shape: tuple):
         torch.cuda.empty_cache()
 
-        # 1. SuperPoint apenas na câmara
+        # SuperPoint apenas na câmara
         tensor_cam = self._preprocess_image(img_cam)
         pred_cam = self.superpoint({"image": tensor_cam})
 
-        # 2. Construir dados cruzando GPU em tempo real com Disco pré-calculado
-        data = {
-            "image0": tensor_cam,
-            # Placeholder vazio para o mapa. O SuperGlue só precisa das dimensões, não dos píxeis!
-            "image1": torch.empty((1, 1, map_shape[0], map_shape[1]), device=self.device),
-            "keypoints0": pred_cam["keypoints"][0].unsqueeze(0),
-            "scores0": pred_cam["scores"][0].unsqueeze(0),
-            "descriptors0": pred_cam["descriptors"][0].unsqueeze(0),
-            
-            # Dados que vieram do .npz (Mover para o GPU)
-            "keypoints1": torch.from_numpy(map_features["keypoints"]).float().unsqueeze(0).to(self.device),
-            "scores1": torch.from_numpy(map_features["scores"]).float().unsqueeze(0).to(self.device),
-            "descriptors1": torch.from_numpy(map_features["descriptors"]).float().unsqueeze(0).to(self.device),
+        # O superpoint devolve  [256, N] lightglue exige [N, 256] rodar a matriz
+        desc_cam = pred_cam["descriptors"][0].transpose(0, 1)
+        desc_map = (
+            torch.from_numpy(map_features["descriptors"]).float().to(self.device).transpose(0, 1)
+        )
+
+        # merdas para o lightglue
+        feats0 = {
+            "keypoints": pred_cam["keypoints"][0].unsqueeze(0),
+            "scores": pred_cam["scores"][0].unsqueeze(0),
+            "descriptors": desc_cam.unsqueeze(0),
+            # O LightGlue precisa do tamanho da imagem [Largura, Altura]
+            "image_size": torch.tensor(
+                [[tensor_cam.shape[3], tensor_cam.shape[2]]], device=self.device
+            ),
         }
 
-        # 3. SuperGlue executa o match final
-        pred = self.superglue(data)
+        feats1 = {
+            "keypoints": torch.from_numpy(map_features["keypoints"])
+            .float()
+            .unsqueeze(0)
+            .to(self.device),
+            "scores": torch.from_numpy(map_features["scores"]).float().unsqueeze(0).to(self.device),
+            "descriptors": desc_map.unsqueeze(0),
+            # map_shape vem do main.py como (Altura, Largura)
+            "image_size": torch.tensor([[map_shape[1], map_shape[0]]], device=self.device),
+        }
 
-        # 4. Extrair e validar
-        matches = pred["matches0"][0].cpu().numpy()
-        valid = matches > -1
+        # interação lightglue
+        pred = self.lightglue({"image0": feats0, "image1": feats1})
 
-        mkpts_cam = pred_cam["keypoints"][0].cpu().numpy()[valid]
-        mkpts_map = map_features["keypoints"][matches[valid]]
+        # extrair
+        matches = pred["matches"][0].cpu().numpy()  # Array de shape [N, 2]
+
+        if len(matches) == 0:
+            return np.array([]), np.array([])
+
+        # Índices dos matches válidos
+        m0 = matches[:, 0]
+        m1 = matches[:, 1]
+
+        # Ir buscar as coordenadas usando os índices
+        mkpts_cam = feats0["keypoints"][0].cpu().numpy()[m0]
+        mkpts_map = feats1["keypoints"][0].cpu().numpy()[m1]
 
         return mkpts_cam.T, mkpts_map.T
->>>>>>> 8e5ddca (first offline feature try)

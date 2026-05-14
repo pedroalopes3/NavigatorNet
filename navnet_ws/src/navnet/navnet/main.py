@@ -381,7 +381,11 @@ class NavNetNode(Node):
                         self._publish_cv2_image(self.matches_pub, matches_img, sec, nanosec)
 
                 except Exception as e:
-                    self.get_logger().error(f"Erro a processar a frame na IA: {e}")
+                    import traceback
+
+                    self.get_logger().error(
+                        f"Erro a processar a frame no SuperPoint/LightGlue:\n{traceback.format_exc()}"
+                    )
 
         # publishers das imagens
         self._publish_cv2_image(self.image_pub, calibrated_image, sec, nanosec)
